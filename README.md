@@ -1,32 +1,30 @@
-# React + TypeScript + Vite
+# V E L O C I T Y
+> *Spatial precision. Kinetic intent.*
 
-This template provides a minimal setup to get React working in Vite with HMR and some Oxlint rules.
+**velocity: a spatial typing engine.** Redefining input as kinetic intent through a 2D coordinate system. Words activate via spatial focus, morphing from technical Mono to elegant Serif. High-end Bone/Black aesthetic with magnetic grid physics. Tracks speed, accuracy, and synergy. Precision-engineered for the flow state. Minimalist. Precise.
 
-Currently, two official plugins are available:
+---
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+## // SYSTEM_SPECIFICATIONS
+- **Typography:** Serif (*Cormorant Garamond*) // Monospace (*JetBrains Mono*)
+- **Palette:** Bone (`#FDFDFB`) // Pitch Black (`#000000`)
+- **Physics:** Linear Interpolated Magnetic Grid Displacement
+- **Logic:** Spatial Word-Node Spawning with Distance Buffering
 
-## React Compiler
+## // OPERATIONAL_MODES
+- **01_CHRONO:** Standardized 60-second performance benchmark.
+- **02_OVERDRIVE:** Survival protocol. Time is earned through precision.
+- **03_ZEN:** Atmospheric flow. Zero friction. Zero failure.
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+## // CORE_MECHANICS
+- **Spatial Lens:** Words are only "typable" within a 150px focus radius.
+- **Font Interpolation:** Seamless morphing between data (Mono) and active (Serif) states.
+- **Ghost HUD:** Real-time metrics at 5% opacity for non-distractive feedback.
+- **Synergy Multiplier:** Rewards fluid transitions between spatial nodes.
 
-## Expanding the Oxlint configuration
+## // LOCAL_INITIALIZATION
+To initialize the engine on your local machine:
 
-If you are developing a production application, we recommend enabling type-aware lint rules by installing `oxlint-tsgolint` and editing `.oxlintrc.json`:
-
-```json
-{
-  "$schema": "./node_modules/oxlint/configuration_schema.json",
-  "plugins": ["react", "typescript", "oxc"],
-  "options": {
-    "typeAware": true
-  },
-  "rules": {
-    "react/rules-of-hooks": "error",
-    "react/only-export-components": ["warn", { "allowConstantExport": true }]
-  }
-}
-```
-
-See the [Oxlint rules documentation](https://oxc.rs/docs/guide/usage/linter/rules) for the full list of rules and categories.
+```bash
+npm install
+npm run dev

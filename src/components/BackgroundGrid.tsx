@@ -39,7 +39,6 @@ export const BackgroundGrid: React.FC<BackgroundGridProps> = ({
   const driftRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
   const lastTimeRef = useRef<number>(Date.now());
 
-  // Keep words reference updated without restarting the canvas loop
   wordsRef.current = words;
 
   if (implosion && implosion.time > lastImplosionTimeRef.current) {
@@ -66,12 +65,13 @@ export const BackgroundGrid: React.FC<BackgroundGridProps> = ({
 
     window.addEventListener('resize', handleResize);
 
-    // Grid spacing: 20px
-    const spacing = 20;
-    const repulsionRadius = 150;
-    const maxRepulsion = 14; // pixels pushed away
+    const spacing = 24; // Baseline 24px architectural grid
+    // Spatial Impact: Doubled Repulsion Radius to 290px for a massive visible clearing
+    const repulsionRadius = 290;
+    const maxRepulsion = 32; // Increased force for sharp edge compression
+    // Tether Scaling: Captured distance increased to 180px
+    const tetherRadius = 180;
 
-    // Smoothly interpolated mouse for a springier lag effect
     let smoothMouseX = mousePos.x;
     let smoothMouseY = mousePos.y;
 
@@ -82,11 +82,8 @@ export const BackgroundGrid: React.FC<BackgroundGridProps> = ({
       const delta = now - lastTimeRef.current;
       lastTimeRef.current = now;
 
-      // Friction: if active, speed drops to 0, otherwise constant drift speed
       if (!frictionActive) {
         if (scrollVertical) {
-          // scrollSpeedY is in WPM, let's map WPM to px/sec. 
-          // E.g., WPM * 2.5 pixels per second makes it scroll smoothly.
           const pxPerSec = scrollSpeedY * 2.5;
           driftRef.current.y += (pxPerSec * delta) / 1000;
         } else {
@@ -98,9 +95,9 @@ export const BackgroundGrid: React.FC<BackgroundGridProps> = ({
       const activeImplosions = implosionsRef.current.filter((imp) => now - imp.time < 300);
       implosionsRef.current = activeImplosions;
 
-      // Determine colors based on theme
-      const dotColor = theme === 'light' ? 'rgba(0, 0, 0, 0.08)' : 'rgba(255, 255, 255, 0.08)';
-      const activeDotColor = theme === 'light' ? 'rgba(0, 0, 0, 0.25)' : 'rgba(255, 255, 255, 0.25)';
+      const dotColor = theme === 'light' ? 'rgba(0, 0, 0, 0.08)' : 'rgba(253, 253, 251, 0.08)';
+      const activeDotColor = theme === 'light' ? 'rgba(0, 0, 0, 0.28)' : 'rgba(253, 253, 251, 0.28)';
+      const tetherColor = '#C5A059'; // Gold status accent
 
       const mx = mousePos.x;
       const my = mousePos.y;
@@ -109,20 +106,16 @@ export const BackgroundGrid: React.FC<BackgroundGridProps> = ({
         smoothMouseX = mx;
         smoothMouseY = my;
       } else {
-        // Interpolate mouse coordinates (simple spring / ease)
-        smoothMouseX += (mx - smoothMouseX) * 0.15;
-        smoothMouseY += (my - smoothMouseY) * 0.15;
+        smoothMouseX += (mx - smoothMouseX) * 0.18;
+        smoothMouseY += (my - smoothMouseY) * 0.18;
       }
 
-      // Draw dot grid
       const cols = Math.ceil(width / spacing) + 4;
       const rows = Math.ceil(height / spacing) + 4;
 
-      // Start offsets to align grid to center
       const offsetX = (width % spacing) / 2;
       const offsetY = (height % spacing) / 2;
 
-      // Parallax offset for Midground (Speed 0.03) based on mouse displacement from window center
       const centerX = width / 2;
       const centerY = height / 2;
       const mouseOffsetFromCenterX = mx === -1000 ? 0 : mx - centerX;
@@ -130,78 +123,130 @@ export const BackgroundGrid: React.FC<BackgroundGridProps> = ({
       const parallaxX = mouseOffsetFromCenterX * 0.03;
       const parallaxY = mouseOffsetFromCenterY * 0.03;
 
+      // STEP 1: Scan grid dots & identify nearest 7 dots within expanded tether radius
+      const gridDots: {
+        col: number;
+        row: number;
+        origX: number;
+        origY: number;
+        dist: number;
+      }[] = [];
+
       for (let c = -2; c < cols; c++) {
         for (let r = -2; r < rows; r++) {
-          // Add parallax drift layer
-          const originalX = c * spacing + offsetX + (driftRef.current.x % spacing) + parallaxX;
-          const originalY = r * spacing + offsetY + (driftRef.current.y % spacing) + parallaxY;
-
-          // Calculate displacement from cursor (using cursor's visual position, which is static relative to screen, so smoothMouseX/Y)
-          const dx = originalX - smoothMouseX;
-          const dy = originalY - smoothMouseY;
+          const origX = c * spacing + offsetX + (driftRef.current.x % spacing) + parallaxX;
+          const origY = r * spacing + offsetY + (driftRef.current.y % spacing) + parallaxY;
+          const dx = origX - smoothMouseX;
+          const dy = origY - smoothMouseY;
           const dist = Math.sqrt(dx * dx + dy * dy);
 
-          let drawX = originalX;
-          let drawY = originalY;
-          let isClose = false;
-
-          if (dist < repulsionRadius) {
-            isClose = true;
-            // Repulsion strength profile (strongest at center, drops to 0 at repulsionRadius)
-            const factor = (repulsionRadius - dist) / repulsionRadius;
-            // Quadratic easing for prettier curvature
-            const easeFactor = factor * factor; 
-            const push = easeFactor * maxRepulsion;
-
-            if (dist > 0) {
-              drawX += (dx / dist) * push;
-              drawY += (dy / dist) * push;
-            }
+          if (dist < tetherRadius) {
+            gridDots.push({ col: c, row: r, origX, origY, dist });
           }
-
-          // Apply active implosion pulls
-          activeImplosions.forEach((imp) => {
-            const idx = imp.x - originalX;
-            const idy = imp.y - originalY;
-            const idist = Math.sqrt(idx * idx + idy * idy);
-            const impRadius = 180;
-
-            if (idist > 0 && idist < impRadius) {
-              const elapsed = now - imp.time;
-              const progress = elapsed / 300;
-              const intensity = Math.sin(progress * Math.PI) * 22; // max 22px pull
-              const factor = (impRadius - idist) / impRadius;
-              const pull = factor * factor * intensity;
-
-              drawX += (idx / idist) * pull;
-              drawY += (idy / idist) * pull;
-            }
-          });
-
-          // Render dot
-          ctx.beginPath();
-          ctx.arc(drawX, drawY, isClose ? 1.5 : 1, 0, Math.PI * 2);
-          ctx.fillStyle = isClose ? activeDotColor : dotColor;
-          ctx.fill();
         }
       }
-      // Draw proximity connection lines from cursor to words
+
+      gridDots.sort((a, b) => a.dist - b.dist);
+      const tetheredList = gridDots.slice(0, 7);
+      const tetheredKeySet = new Set(tetheredList.map((d) => `${d.col},${d.row}`));
+
+      // STEP 2: Render dot grid with expanded repulsion void and edge compression
+      for (let c = -2; c < cols; c++) {
+        for (let r = -2; r < rows; r++) {
+          const key = `${c},${r}`;
+          const isTethered = tetheredKeySet.has(key);
+
+          const origX = c * spacing + offsetX + (driftRef.current.x % spacing) + parallaxX;
+          const origY = r * spacing + offsetY + (driftRef.current.y % spacing) + parallaxY;
+
+          const dx = origX - smoothMouseX;
+          const dy = origY - smoothMouseY;
+          const dist = Math.sqrt(dx * dx + dy * dy);
+
+          let drawX = origX;
+          let drawY = origY;
+          let isClose = false;
+
+          if (isTethered && smoothMouseX !== -1000) {
+            // TETHERED DOT MECHANIC: Pulled inward from the perimeter of the 290px void
+            const pullFactor = ((tetherRadius - dist) / tetherRadius) * 14;
+            if (dist > 0) {
+              drawX -= (dx / dist) * pullFactor;
+              drawY -= (dy / dist) * pullFactor;
+            }
+
+            // Draw 0.5px Gold hairline connection vector
+            ctx.beginPath();
+            ctx.moveTo(smoothMouseX, smoothMouseY);
+            ctx.lineTo(drawX, drawY);
+            ctx.lineWidth = 0.5;
+            ctx.strokeStyle =
+              theme === 'dark' ? 'rgba(197, 160, 89, 0.6)' : 'rgba(197, 160, 89, 0.8)';
+            ctx.stroke();
+
+            // Render captured tether dot highlighted in Gold
+            ctx.beginPath();
+            ctx.arc(drawX, drawY, 2.0, 0, Math.PI * 2);
+            ctx.fillStyle = tetherColor;
+            ctx.fill();
+          } else {
+            // MAGNETIC REPULSION VOID: 290px clearing with sharp perimeter compression
+            if (dist < repulsionRadius) {
+              isClose = true;
+              const factor = (repulsionRadius - dist) / repulsionRadius;
+              // High-order polynomial curve for tight edge compression
+              const easeFactor = Math.pow(factor, 1.8);
+              const push = easeFactor * maxRepulsion;
+
+              if (dist > 0) {
+                drawX += (dx / dist) * push;
+                drawY += (dy / dist) * push;
+              }
+            }
+
+            // Active Implosion Pulls
+            activeImplosions.forEach((imp) => {
+              const idx = imp.x - origX;
+              const idy = imp.y - origY;
+              const idist = Math.sqrt(idx * idx + idy * idy);
+              const impRadius = 180;
+
+              if (idist > 0 && idist < impRadius) {
+                const elapsed = now - imp.time;
+                const progress = elapsed / 300;
+                const intensity = Math.sin(progress * Math.PI) * 22;
+                const factor = (impRadius - idist) / impRadius;
+                const pull = factor * factor * intensity;
+
+                drawX += (idx / idist) * pull;
+                drawY += (idy / idist) * pull;
+              }
+            });
+
+            ctx.beginPath();
+            ctx.arc(drawX, drawY, isClose ? 1.5 : 1, 0, Math.PI * 2);
+            ctx.fillStyle = isClose ? activeDotColor : dotColor;
+            ctx.fill();
+          }
+        }
+      }
+
+      // STEP 3: Draw word proximity connections
       wordsRef.current.forEach((word) => {
         if (!word.isTypable) return;
         ctx.beginPath();
         ctx.moveTo(smoothMouseX, smoothMouseY);
-        // Note: word.x / word.y already has its own foreground parallax shift applied dynamically in App.tsx render, so we connect directly to it.
         ctx.lineTo(word.x, word.y);
         ctx.lineWidth = word.isFocused ? 1.5 : 0.8;
         if (word.isFocused) {
-          ctx.strokeStyle = '#C5A059'; // Gold
+          ctx.strokeStyle = tetherColor; // Gold for focused active word
           ctx.setLineDash([]);
         } else {
-          ctx.strokeStyle = theme === 'light' ? 'rgba(0, 0, 0, 0.15)' : 'rgba(255, 255, 255, 0.15)';
+          ctx.strokeStyle = theme === 'light' ? 'rgba(0, 0, 0, 0.15)' : 'rgba(253, 253, 251, 0.2)';
           ctx.setLineDash([3, 3]);
         }
         ctx.stroke();
-        ctx.setLineDash([]); // Reset
+        ctx.setLineDash([]);
       });
 
       animationFrameId = requestAnimationFrame(render);

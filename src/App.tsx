@@ -2,8 +2,12 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { BackgroundGrid } from './components/BackgroundGrid';
 import { WordNode } from './components/WordNode';
 import { VelocityButton } from './components/VelocityButton';
+import { VariableTitle } from './components/VariableTitle';
+import { BentoHub, type GameMode } from './components/BentoHub';
+import { SessionArchive } from './components/SessionArchive';
+import { CinematicAtmosphere } from './components/CinematicAtmosphere';
 import { audioController } from './utils/audio';
-import { Volume2, VolumeX, Moon, Sun, RotateCcw, BarChart2 } from 'lucide-react';
+import { Volume2, VolumeX, Moon, Sun, RotateCcw } from 'lucide-react';
 import './App.css';
 
 interface WordItem {
@@ -16,8 +20,6 @@ interface WordItem {
   scale: number;
   spawnTime: number;
 }
-
-type GameMode = 'Chrono' | 'Overdrive' | 'Zen';
 
 interface LeaderboardEntry {
   mode: GameMode;
@@ -45,16 +47,7 @@ const WORD_POOL = [
   'Moodboard', 'Brandmark', 'Logotype', 'Concept', 'Visual', 'Symmetry', 'Proximity',
   'Scale', 'Emphasis', 'Unity', 'Movement', 'Pattern', 'Rhythm', 'Balance', 'Harmony',
   'Bleed', 'Colorway', 'Palette', 'Dithering', 'Halftone', 'Pica', 'Folio', 'Gutter',
-  'Mockup', 'Logomark', 'Styleguide', 'Moodboard', 'Ideation', 'Persona', 'Storyboard',
-  'Wireframe', 'High-fidelity', 'Low-fidelity', 'Onboarding', 'Affordance', 'Usability',
-  'Accessibility', 'Friction', 'Signifier', 'Feedback-loop', 'Cognitive-load', 'Fitts-law',
-  'Gestalt', 'Golden-ratio', 'Rule-of-thirds', 'Grid-system', 'Modular-scale', 'Baseline-grid',
-  'Column-width', 'Auto-layout', 'Responsive-grid', 'Fluid-layout', 'Media-queries', 'Breakpoint',
-  'Flex-direction', 'Justify-content', 'Align-items', 'Grid-template', 'Grid-gap', 'Subgrid',
-  'Nesting', 'Inheritance', 'Specificity', 'Cascading', 'Custom-properties', 'CSS-variables',
-  'Transitions', 'Keyframes', 'SVG', 'Canvas', 'WebGL', 'Lottie', 'Rasterization',
-  'Bilinear-filtering', 'Trilinear-filtering', 'Mipmapping', 'Vector-graphics', 'Bezier-curve',
-  'Control-points', 'Anchor-point', 'Pathfinder', 'Boolean-operations', 'Masking', 'Clipping-path'
+  'Auto-layout', 'Subgrid', 'Custom-properties', 'Keyframes', 'SVG', 'WebGL', 'Rasterization'
 ];
 
 function App() {
@@ -94,6 +87,10 @@ function App() {
   const [completedWordsCount, setCompletedWordsCount] = useState(0);
   const [startTime, setStartTime] = useState<number | null>(null);
   const [currentWpm, setCurrentWpm] = useState(0);
+  const [peakWpm, setPeakWpm] = useState(0);
+
+  // Mouse trail history tracking for [ SESSION_ARCHIVE ] visual signature
+  const mousePathRef = useRef<{ x: number; y: number }[]>([]);
 
   // Moving Average tracking for Ghost WPM (2-second window)
   const keystrokesTimeline = useRef<{ timestamp: number; keys: number }[]>([]);
@@ -146,7 +143,7 @@ function App() {
     };
   }, [words, focusedWordId, mousePos, correctKeys, incorrectKeys, completedWordsCount, startTime, muted, lastCompletionTime, flowStreak, synergyPoints, gameMode, isPlaying, isGameOver, timeLeft, currentWpm]);
 
-  // Load High Scores and Leaderboard from LocalStorage on mount
+  // Load High Scores from LocalStorage on mount
   useEffect(() => {
     const savedScores = localStorage.getItem('velocity_high_scores');
     if (savedScores) {
@@ -167,10 +164,15 @@ function App() {
     document.body.className = `${theme}-theme`;
   }, [theme]);
 
-  // Handle Mouse Move
+  // Handle Mouse Move & Record Trajectory Signature
   useEffect(() => {
     const handleMouseMove = (e: MouseEvent) => {
       setMousePos({ x: e.clientX, y: e.clientY });
+      
+      // Record mouse path for Visual Signature if game is active
+      if (stateRef.current.isPlaying) {
+        mousePathRef.current.push({ x: e.clientX, y: e.clientY });
+      }
     };
     window.addEventListener('mousemove', handleMouseMove);
     return () => window.removeEventListener('mousemove', handleMouseMove);
@@ -232,8 +234,8 @@ function App() {
   const getPositionInQuadrant = useCallback((quad: number) => {
     const w = window.innerWidth;
     const h = window.innerHeight;
-    const paddingX = w * 0.12;
-    const paddingY = h * 0.15;
+    const paddingX = w * 0.14;
+    const paddingY = h * 0.18;
     const centerX = w / 2;
     const centerY = h / 2;
     
@@ -263,16 +265,14 @@ function App() {
     };
   }, []);
 
-  // Spatial buffer check (250px radius check)
   const isTooClose = useCallback((newX: number, newY: number, existingWords: WordItem[]) => {
     return existingWords.some(w => {
       const dx = w.x - newX;
       const dy = w.y - newY;
-      return dx * dx + dy * dy < 250 * 250; // 250px radius limit
+      return dx * dx + dy * dy < 250 * 250;
     });
   }, []);
 
-  // Spawn word
   const spawnWord = useCallback((existingWords: WordItem[], forceQuadrant?: number): WordItem => {
     let randomWord = WORD_POOL[Math.floor(Math.random() * WORD_POOL.length)];
     let attempts = 0;
@@ -289,10 +289,10 @@ function App() {
     const isCornerOverlap = (x: number, y: number) => {
       const w = window.innerWidth;
       const h = window.innerHeight;
-      if (x < 450 && y < 180) return true; // Top-Left
-      if (x > w - 300 && y < 180) return true; // Top-Right
-      if (x < 400 && y > h - 250) return true; // Bottom-Left
-      if (x > w - 360 && y > h - 280) return true; // Bottom-Right
+      if (x < 420 && y < 200) return true;
+      if (x > w - 300 && y < 200) return true;
+      if (x < 400 && y > h - 220) return true;
+      if (x > w - 360 && y > h - 240) return true;
       return false;
     };
 
@@ -320,12 +320,12 @@ function App() {
     };
   }, [getPositionInQuadrant, isTooClose]);
 
-  // Initialize game
+  // Initialize game session
   const initializeGame = () => {
     let initialList: WordItem[] = [];
     stateRef.current.gameMode = gameMode;
+    mousePathRef.current = []; // Clear recorded mouse trajectory for new signature
 
-    // Zen Mode keeps only 2-3 words on screen at once. Chrono/Overdrive keep 5.
     const spawnCount = gameMode === 'Zen' ? 3 : 5;
 
     for (let i = 0; i < spawnCount; i++) {
@@ -340,6 +340,7 @@ function App() {
     setCompletedWordsCount(0);
     setStartTime(Date.now());
     setCurrentWpm(0);
+    setPeakWpm(0);
     setLastCompletionTime(null);
     setFlowStreak(0);
     setSynergyPoints(0);
@@ -361,7 +362,7 @@ function App() {
     setIsPlaying(true);
   };
 
-  // Keyboard and typing controller
+  // Keyboard controller
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       const current = stateRef.current;
@@ -374,11 +375,8 @@ function App() {
       if (e.key.length !== 1 || e.ctrlKey || e.altKey || e.metaKey) return;
       
       const char = e.key.toLowerCase();
-      
-      // Log keystroke with timestamp for 2-second moving average calculation
       keystrokesTimeline.current.push({ timestamp: Date.now(), keys: 1 });
 
-      // 1. If currently focused on a word
       if (current.focusedWordId) {
         const targetWord = current.words.find(w => w.id === current.focusedWordId);
         if (targetWord) {
@@ -400,8 +398,6 @@ function App() {
               }
 
               const updatedWords = current.words.filter(w => w.id !== current.focusedWordId);
-              
-              // Spawns in a quadrant other than the mouse
               const mouseQuad = getQuadrant(current.mousePos.x, current.mousePos.y);
               const availableQuads = [1, 2, 3, 4].filter(q => q !== mouseQuad);
               const targetQuad = availableQuads[Math.floor(Math.random() * availableQuads.length)];
@@ -427,7 +423,6 @@ function App() {
         }
       }
 
-      // 2. If no word is currently focused
       const typableWords = current.words.filter(w =>
         isWithinRadius(w.x, w.y, current.mousePos.x, current.mousePos.y)
       );
@@ -475,7 +470,6 @@ function App() {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [isPlaying, spawnWord, isWithinRadius, getQuadrant]);
 
-  // Break focus helper
   useEffect(() => {
     if (!focusedWordId || !isPlaying) return;
     const active = words.find(w => w.id === focusedWordId);
@@ -487,7 +481,7 @@ function App() {
     }
   }, [mousePos, focusedWordId, words, isWithinRadius, isPlaying]);
 
-  // Moving Average WPM Calculator (2-second moving average window)
+  // Moving Average WPM Calculator
   useEffect(() => {
     if (!startTime || !isPlaying) return;
 
@@ -495,30 +489,31 @@ function App() {
       const now = Date.now();
       const twoSecondsAgo = now - 2000;
 
-      // Filter keystrokes in last 2 seconds
       keystrokesTimeline.current = keystrokesTimeline.current.filter(item => item.timestamp >= twoSecondsAgo);
       const strokeCount = keystrokesTimeline.current.reduce((acc, item) => acc + item.keys, 0);
 
-      // Convert 2s rate to 1min (WPM = (keys / 5) * 30)
       const wpmAverage = Math.round((strokeCount / 5) * 30);
       setCurrentWpm(wpmAverage);
+
+      if (wpmAverage > peakWpm) {
+        setPeakWpm(wpmAverage);
+      }
     };
 
     const interval = setInterval(updateWpm, 100);
     return () => clearInterval(interval);
-  }, [startTime, isPlaying]);
+  }, [startTime, isPlaying, peakWpm]);
 
   const totalKeys = correctKeys + incorrectKeys;
   const accuracy = totalKeys > 0 ? Math.round((correctKeys / totalKeys) * 100) : 100;
 
-  // Score
   const rawScore = (correctKeys * 10) + (synergyPoints * 100);
   const accMultiplier = accuracy === 100 ? 1.0 : (accuracy < 95 ? 0.8 : 1.0);
   const score = Math.round(rawScore * accMultiplier);
 
   // High Scores & Leaderboard tracking
   useEffect(() => {
-    if ((isGameOver || (!isPlaying && startTime !== null)) && gameMode !== 'Zen') {
+    if (isGameOver && gameMode !== 'Zen') {
       const currentHigh = scores[gameMode] || 0;
       
       let newScores = { ...scores };
@@ -551,7 +546,7 @@ function App() {
       leaderboardList = leaderboardList.slice(0, 10);
       localStorage.setItem('velocity_leaderboards', JSON.stringify(leaderboardList));
     }
-  }, [isGameOver, isPlaying, score, gameMode, scores, startTime, currentWpm, accuracy]);
+  }, [isGameOver, score, gameMode, scores, currentWpm, accuracy]);
 
   const getLeaderboardData = (): LeaderboardEntry[] => {
     const savedLeaderboards = localStorage.getItem('velocity_leaderboards');
@@ -571,21 +566,25 @@ function App() {
   const mouseDeltaX = mousePos.x === -1000 ? 0 : mousePos.x - windowCenterX;
   const mouseDeltaY = mousePos.y === -1000 ? 0 : mousePos.y - windowCenterY;
 
-  // Foreground: Word Nodes (Speed 0.05)
   const fgParallaxX = mouseDeltaX * 0.05;
   const fgParallaxY = mouseDeltaY * 0.05;
 
-  // Background: Ghost WPM (Speed 0.01)
   const bgParallaxX = mouseDeltaX * 0.01;
   const bgParallaxY = mouseDeltaY * 0.01;
 
   return (
     <>
       <div className="game-container">
+        {/* Architectural Viewfinder Corner Brackets */}
         <div className="corner-bracket top-left"></div>
         <div className="corner-bracket top-right"></div>
         <div className="corner-bracket bottom-left"></div>
         <div className="corner-bracket bottom-right"></div>
+
+        {/* Cinematic Atmosphere (3% film grain overlay & digital fog noise texture) */}
+        <CinematicAtmosphere theme={theme} />
+
+        {/* Neural Tether Canvas Background */}
         <BackgroundGrid
           theme={theme}
           words={words.map(w => ({
@@ -599,7 +598,7 @@ function App() {
           mousePos={mousePos}
         />
 
-        {/* Word Nodes Space */}
+        {/* Interactive Word Nodes Space */}
         <div className="interactive-area">
           {isPlaying &&
             words.map(w => (
@@ -616,81 +615,81 @@ function App() {
             ))}
         </div>
 
-        {/* ACTIVE GAME HUD */}
+        {/* ACTIVE GAME PLAY HUD */}
         {isPlaying && (
           <div className="active-hud-overlay">
-            {/* Top-Left: Static, sharp Logo */}
-            <div className="hud-logo" onClick={() => triggerGameOver()} style={{ cursor: 'pointer' }}>
-              VELOCITY
+            {/* Top-Left: Proximity Variable Title */}
+            <div className="hud-logo-container">
+              <VariableTitle mousePos={mousePos} onClick={triggerGameOver} />
             </div>
 
-            {/* Top-Right: Game settings/controls */}
+            {/* Top-Right: Game controls */}
             <div className="hud-controls">
               <VelocityButton
                 onClick={() => setMuted(!muted)}
                 ariaLabel={muted ? 'Unmute' : 'Mute'}
               >
-                {muted ? <VolumeX size={16} /> : <Volume2 size={16} />}
+                {muted ? <VolumeX size={14} /> : <Volume2 size={14} />}
               </VelocityButton>
               <VelocityButton
                 onClick={() => setTheme(theme === 'light' ? 'dark' : 'light')}
                 ariaLabel="Toggle theme"
               >
-                {theme === 'light' ? <Moon size={16} /> : <Sun size={16} />}
+                {theme === 'light' ? <Moon size={14} /> : <Sun size={14} />}
               </VelocityButton>
               <VelocityButton
                 onClick={initializeGame}
                 ariaLabel="Reset Game"
               >
-                <RotateCcw size={16} />
+                <RotateCcw size={14} />
               </VelocityButton>
               <VelocityButton
                 onClick={triggerGameOver}
                 ariaLabel="Quit Game"
               >
-                Quit
+                [ QUIT ]
               </VelocityButton>
             </div>
 
-            {/* Bottom-Left: Fine HUD stats */}
+            {/* Bottom-Left: Telemetry HUD stats */}
             <div className="accuracy-stats-panel">
               <div className="stat-row">
-                <span className="stat-label">MODE</span>
-                <span className="stat-value">{gameMode}</span>
+                <span className="stat-label">MODE:</span>
+                <span className="stat-value">{gameMode.toUpperCase()}</span>
               </div>
               {(gameMode === 'Chrono' || gameMode === 'Overdrive') && (
                 <div className="stat-row">
-                  <span className="stat-label">TIME</span>
-                  <span className="stat-value">{timeLeft}s</span>
+                  <span className="stat-label">TIME:</span>
+                  <span className="stat-value">{timeLeft}S</span>
                 </div>
               )}
               {gameMode !== 'Zen' && (
                 <div className="stat-row">
-                  <span className="stat-label">SCORE</span>
+                  <span className="stat-label">SCORE:</span>
                   <span className="stat-value">{score}</span>
                 </div>
               )}
               <div className="stat-row">
-                <span className="stat-label">WPM</span>
+                <span className="stat-label">WPM:</span>
                 <span className="stat-value">{currentWpm}</span>
               </div>
               <div className="stat-row">
-                <span className="stat-label">ACC</span>
+                <span className="stat-label">ACC:</span>
                 <span className="stat-value">{accuracy}%</span>
               </div>
               <div className="stat-row">
-                <span className="stat-label">COM</span>
+                <span className="stat-label">WORDS:</span>
                 <span className="stat-value">{completedWordsCount}</span>
               </div>
               {flowStreak > 0 && gameMode !== 'Zen' && (
-                <div className="stat-row flow-highlight">
-                  <span className="stat-label">FLOW</span>
+                <div className="stat-row">
+                  <span className="stat-label">FLOW:</span>
                   <span className="stat-value">x{flowStreak + 1}</span>
                 </div>
               )}
             </div>
 
-            {/* Bottom-Right / Background: Ghost WPM & Synergy */}
+            {/* Bottom-Right / Background: Ghost WPM */}
             <div 
               className="massive-wpm-container" 
               style={{ 
@@ -705,143 +704,49 @@ function App() {
                 transform: `translate(${bgParallaxX}px, ${bgParallaxY}px)`
               }}
             >
-              {synergyPoints} Synergy
+              {synergyPoints} SYNERGY
             </div>
           </div>
         )}
 
-        {/* LANDING / START SCREEN OVERLAY */}
-        {!isPlaying && (
-          <div className="instruction-overlay">
-            {/* Top-Left Corner: Static Logo + Global configuration icons */}
-            <div className="menu-top-left">
-              <div className="instruction-title">VELOCITY</div>
-              <div className="instruction-tagline">Spatial precision. Kinetic intent.</div>
-              <div className="menu-config-row">
-                <VelocityButton
-                  onClick={() => setMuted(!muted)}
-                  ariaLabel={muted ? 'Unmute' : 'Mute'}
-                >
-                  {muted ? <VolumeX size={14} /> : <Volume2 size={14} />}
-                </VelocityButton>
-                <VelocityButton
-                  onClick={() => setTheme(theme === 'light' ? 'dark' : 'light')}
-                  ariaLabel="Toggle theme"
-                >
-                  {theme === 'light' ? <Moon size={14} /> : <Sun size={14} />}
-                </VelocityButton>
-                <VelocityButton
-                  className={showLeaderboard ? 'active' : ''}
-                  onClick={() => setShowLeaderboard(!showLeaderboard)}
-                  ariaLabel="View Leaderboard"
-                >
-                  <BarChart2 size={14} />
-                </VelocityButton>
-              </div>
-            </div>
+        {/* 1. ASYMMETRIC BENTO HUB (START / HUB SCREEN OVERLAY) */}
+        {!isPlaying && !isGameOver && (
+          <BentoHub
+            theme={theme}
+            setTheme={setTheme}
+            muted={muted}
+            setMuted={setMuted}
+            showLeaderboard={showLeaderboard}
+            setShowLeaderboard={setShowLeaderboard}
+            gameMode={gameMode}
+            setGameMode={setGameMode}
+            scores={scores}
+            getLeaderboardData={getLeaderboardData}
+            mousePos={mousePos}
+            onBeginSession={initializeGame}
+          />
+        )}
 
-            {/* Top-Right Corner: Archive Data */}
-            <div className="pb-tracker-container">
-              <div className="archive-title">[ ARCHIVE_DATA ]</div>
-              <div className="pb-item">PB CHRONO: {scores.Chrono} PTS</div>
-              <div className="pb-item">PB OVERDRIVE: {scores.Overdrive} PTS</div>
-            </div>
-
-            {/* Bottom-Left Corner: Initialise button or Leaderboard panel */}
-            <div className="init-action-container">
-              {showLeaderboard ? (
-                <div className="leaderboard-overlay">
-                  <div className="leaderboard-title">Global Leaderboard</div>
-                  <table className="leaderboard-table">
-                    <thead>
-                      <tr>
-                        <th>Mode</th>
-                        <th>Score</th>
-                        <th>WPM</th>
-                        <th>Acc</th>
-                        <th>Date</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {getLeaderboardData().length === 0 ? (
-                        <tr>
-                          <td colSpan={5} style={{ textAlign: 'center', opacity: 0.5 }}>No sessions recorded</td>
-                        </tr>
-                      ) : (
-                        getLeaderboardData().map((entry, idx) => (
-                          <tr key={idx}>
-                            <td>{entry.mode}</td>
-                            <td className="leaderboard-score">{entry.score}</td>
-                            <td>{entry.wpm}</td>
-                            <td>{entry.accuracy}%</td>
-                            <td style={{ opacity: 0.6, fontSize: '10px' }}>{entry.date}</td>
-                          </tr>
-                        ))
-                      )}
-                    </tbody>
-                  </table>
-                  <div className="leaderboard-actions">
-                    <VelocityButton onClick={() => setShowLeaderboard(false)} style={{ width: '100%' }}>
-                      Return
-                    </VelocityButton>
-                  </div>
-                </div>
-              ) : (
-                <>
-                  {isGameOver ? (
-                    <div className="instruction-sub">
-                      Session Completed in {gameMode} Mode.<br />
-                      Score: <span className="score-highlight">{score}</span> | Avg WPM: {currentWpm}
-                    </div>
-                  ) : (
-                    <div className="instruction-sub">
-                      Select calibration path to start.
-                    </div>
-                  )}
-
-                  <VelocityButton
-                    onClick={initializeGame}
-                    style={{ zIndex: 100 }}
-                    className="begin-session-btn"
-                  >
-                    [ BEGIN_SESSION ]
-                  </VelocityButton>
-                </>
-              )}
-            </div>
-
-            {/* Bottom-Right Corner: Mode selector vertically stacked */}
-            {!showLeaderboard && (
-              <div className="mode-selector-container">
-                <div className="mode-selector-vertical">
-                  <VelocityButton
-                    className={gameMode === 'Chrono' ? 'active' : ''}
-                    onClick={() => setGameMode('Chrono')}
-                  >
-                    Chrono
-                  </VelocityButton>
-                  <VelocityButton
-                    className={gameMode === 'Overdrive' ? 'active' : ''}
-                    onClick={() => setGameMode('Overdrive')}
-                  >
-                    Overdrive
-                  </VelocityButton>
-                  <VelocityButton
-                    className={gameMode === 'Zen' ? 'active' : ''}
-                    onClick={() => setGameMode('Zen')}
-                  >
-                    Zen
-                  </VelocityButton>
-                </div>
-
-                <div className="mode-desc">
-                  {gameMode === 'Chrono' && 'Fixed 60-second test. Calibrate WPM and score density.'}
-                  {gameMode === 'Overdrive' && 'Start with 15s. Completing words adds +3s, flow synergy adds +5s. Surge ahead.'}
-                  {gameMode === 'Zen' && 'Minimalist mode. No timers, no scores, no failure. Pure training flow.'}
-                </div>
-              </div>
-            )}
-          </div>
+        {/* 4. THE SESSION ARCHIVE (SCORE SCREEN UPON GAME COMPLETION) */}
+        {isGameOver && (
+          <SessionArchive
+            score={score}
+            wpm={currentWpm}
+            peakWpm={peakWpm}
+            accuracy={accuracy}
+            correctKeys={correctKeys}
+            incorrectKeys={incorrectKeys}
+            flowStreak={flowStreak}
+            synergyPoints={synergyPoints}
+            gameMode={gameMode}
+            mousePath={mousePathRef.current}
+            onRecalibrate={initializeGame}
+            onReturnToNucleus={() => {
+              setIsGameOver(false);
+              setIsPlaying(false);
+            }}
+            theme={theme}
+          />
         )}
       </div>
     </>

@@ -22,16 +22,14 @@ export const WordNode: React.FC<WordNodeProps> = ({
   theme,
   gameModeScale = 1.0,
 }) => {
-  // Spring transition setup
-  const springConfig = { type: 'spring' as const, stiffness: 80, damping: 15, mass: 0.8 };
+  const springConfig = { type: 'spring' as const, stiffness: 280, damping: 24, mass: 0.7 };
 
   const typedPart = word.slice(0, typedLength);
   const remainingPart = word.slice(typedLength);
 
-  // Define colors based on state
-  const baseTextColor = theme === 'light' ? 'rgba(0, 0, 0, 0.4)' : 'rgba(255, 255, 255, 0.4)';
-  const activeTextColor = theme === 'light' ? '#000000' : '#ffffff';
-  const accentColor = '#C5A059'; // Elegant gold accent
+  const baseTextColor = theme === 'light' ? 'rgba(0, 0, 0, 0.45)' : 'rgba(253, 253, 251, 0.55)';
+  const activeTextColor = theme === 'light' ? '#000000' : '#FDFDFB'; // Bone White standard
+  const goldAccentColor = '#C5A059'; // Gold strictly for active focused node
 
   return (
     <motion.div
@@ -43,7 +41,7 @@ export const WordNode: React.FC<WordNodeProps> = ({
         scale: (isFocused ? 1.15 : isTypable ? 1.05 : 0.95) * gameModeScale,
         opacity: isTypable || isFocused ? 1 : 0.6,
       }}
-      exit={{ scale: 0, opacity: 0, transition: { duration: 0.2 } }}
+      exit={{ scale: 0, opacity: 0, transition: { duration: 0.15 } }}
       transition={springConfig}
       style={{
         position: 'absolute',
@@ -56,14 +54,16 @@ export const WordNode: React.FC<WordNodeProps> = ({
         justifyContent: 'center',
       }}
     >
-      {/* Visual background indicator ring */}
+      {/* Visual background indicator box — Gold if focused, Bone White if idle */}
       <motion.div
         animate={{
           scale: isFocused ? 1.2 : isTypable ? 1.0 : 0.8,
           borderColor: isFocused
-            ? 'rgba(197, 160, 89, 0.4)'
+            ? '#C5A059' // Gold strictly for active focus node
             : isTypable
-            ? 'rgba(255, 255, 255, 0.15)'
+            ? theme === 'light'
+              ? 'rgba(0, 0, 0, 0.25)'
+              : 'rgba(253, 253, 251, 0.35)'
             : 'rgba(0, 0, 0, 0.0)',
           borderWidth: isTypable || isFocused ? '1px' : '0px',
         }}
@@ -81,7 +81,7 @@ export const WordNode: React.FC<WordNodeProps> = ({
 
       {/* Font morph container */}
       <div style={{ position: 'relative', height: '36px', display: 'flex', alignItems: 'center' }}>
-        {/* MONO Layer (Not active / base state) */}
+        {/* MONO Layer (Base state — Bone White) */}
         <motion.div
           animate={{
             opacity: isFocused ? 0 : 1,
@@ -102,7 +102,7 @@ export const WordNode: React.FC<WordNodeProps> = ({
           {word}
         </motion.div>
 
-        {/* SERIF Layer (Morphs in when focused) */}
+        {/* SERIF Layer (Focus state — Gold #C5A059) */}
         <motion.div
           initial={{ opacity: 0, y: 8, scale: 0.9 }}
           animate={{
@@ -117,16 +117,16 @@ export const WordNode: React.FC<WordNodeProps> = ({
             fontStyle: 'italic',
             fontWeight: 500,
             letterSpacing: '1px',
-            color: activeTextColor,
+            color: goldAccentColor, // Gold strictly for active target focus node
             position: isFocused ? 'relative' : 'absolute',
           }}
         >
-          <span style={{ color: accentColor, fontWeight: 700 }}>{typedPart}</span>
-          <span>{remainingPart}</span>
+          <span style={{ color: goldAccentColor, fontWeight: 700 }}>{typedPart}</span>
+          <span style={{ color: goldAccentColor, opacity: 0.8 }}>{remainingPart}</span>
         </motion.div>
       </div>
 
-      {/* Proximity dot tag when typable but not focused */}
+      {/* Proximity tag when typable */}
       <AnimatePresence>
         {isTypable && !isFocused && (
           <motion.div
@@ -137,7 +137,7 @@ export const WordNode: React.FC<WordNodeProps> = ({
               fontFamily: "'JetBrains Mono', monospace",
               fontSize: '9px',
               textTransform: 'uppercase',
-              color: accentColor,
+              color: '#FDFDFB',
               letterSpacing: '1px',
               marginTop: '4px',
             }}

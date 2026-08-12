@@ -99,11 +99,11 @@ export const BentoHub: React.FC<BentoHubProps> = ({
                 marginBottom: '12px',
               }}
             >
-              <span style={{ fontSize: '10px', letterSpacing: '0.25em', opacity: 0.55, color: '#FDFDFB' }}>
+              <span style={{ fontSize: '10px', letterSpacing: '0.25em', color: '#C5A059' }}>
                 [ SPATIAL_TYPING_ENGINE ]
               </span>
-              <span style={{ fontSize: '10px', letterSpacing: '0.15em', color: '#C5A059' }}>
-                v2.0_STARK
+              <span style={{ fontSize: '10px', letterSpacing: '0.15em', color: '#FDFDFB', opacity: 0.65 }}>
+                VECTOR_01 // 60s_STABILIZED
               </span>
             </div>
 
@@ -115,8 +115,8 @@ export const BentoHub: React.FC<BentoHubProps> = ({
                 fontFamily: "'Cormorant Garamond', serif",
                 fontStyle: 'italic',
                 fontSize: '16px',
-                opacity: 0.85,
-                color: '#FDFDFB',
+                opacity: 0.9,
+                color: '#C5A059',
                 marginTop: '8px',
                 letterSpacing: '0.02em',
               }}
@@ -133,7 +133,7 @@ export const BentoHub: React.FC<BentoHubProps> = ({
               justifyContent: 'space-between',
               marginTop: '24px',
               paddingTop: '16px',
-              borderTop: '1px solid var(--border-idle)',
+              borderTop: '1px solid #C5A059',
             }}
           >
             <div style={{ display: 'flex', gap: '12px' }}>
@@ -170,7 +170,7 @@ export const BentoHub: React.FC<BentoHubProps> = ({
           className="bento-module archive-module"
           style={{
             gridColumn: 'span 5',
-            border: '1px solid var(--border-idle)',
+            border: '1px solid #C5A059',
             borderRadius: '0px',
             padding: '24px',
             display: 'flex',
@@ -180,7 +180,7 @@ export const BentoHub: React.FC<BentoHubProps> = ({
           }}
         >
           <div>
-            <div style={{ fontSize: '10px', letterSpacing: '0.2em', opacity: 0.55, marginBottom: '14px', color: '#FDFDFB' }}>
+            <div style={{ fontSize: '10px', letterSpacing: '0.2em', marginBottom: '14px', color: '#C5A059' }}>
               [ ARCHIVE_TELEMETRY ]
             </div>
 
@@ -190,12 +190,12 @@ export const BentoHub: React.FC<BentoHubProps> = ({
                   display: 'flex',
                   justifyContent: 'space-between',
                   padding: '10px 14px',
-                  border: '1px solid var(--border-idle)',
+                  border: '1px solid #C5A059',
                   fontSize: '11px',
                 }}
               >
                 <span style={{ opacity: 0.6, color: '#FDFDFB' }}>PB CHRONO:</span>
-                <span style={{ fontWeight: 700, color: '#FDFDFB' }}>{scores.Chrono || 0} PTS</span>
+                <span style={{ fontWeight: 700, color: '#C5A059' }}>{scores.Chrono || 0} PTS</span>
               </div>
 
               <div
@@ -203,12 +203,12 @@ export const BentoHub: React.FC<BentoHubProps> = ({
                   display: 'flex',
                   justifyContent: 'space-between',
                   padding: '10px 14px',
-                  border: '1px solid var(--border-idle)',
+                  border: '1px solid #C5A059',
                   fontSize: '11px',
                 }}
               >
                 <span style={{ opacity: 0.6, color: '#FDFDFB' }}>PB OVERDRIVE:</span>
-                <span style={{ fontWeight: 700, color: '#FDFDFB' }}>{scores.Overdrive || 0} PTS</span>
+                <span style={{ fontWeight: 700, color: '#C5A059' }}>{scores.Overdrive || 0} PTS</span>
               </div>
             </div>
           </div>
@@ -224,7 +224,7 @@ export const BentoHub: React.FC<BentoHubProps> = ({
             }}
           >
             MOTOR_MEMORY: ACTIVE <br />
-            PROXIMITY_LOCK: 150PX RADIUS <br />
+            PROXIMITY_LOCK: 180PX RADIUS <br />
             SPRING_PHYSICS: HIGH_TENSION
           </div>
         </div>
@@ -234,7 +234,7 @@ export const BentoHub: React.FC<BentoHubProps> = ({
           className="bento-module action-module"
           style={{
             gridColumn: 'span 7',
-            border: '1px solid var(--border-idle)',
+            border: '1px solid #C5A059',
             borderRadius: '0px',
             padding: '28px',
             display: 'flex',
@@ -245,16 +245,16 @@ export const BentoHub: React.FC<BentoHubProps> = ({
         >
           {showLeaderboard ? (
             <div>
-              <div style={{ fontSize: '11px', letterSpacing: '0.2em', opacity: 0.55, marginBottom: '12px', color: '#FDFDFB' }}>
+              <div style={{ fontSize: '11px', letterSpacing: '0.2em', marginBottom: '12px', color: '#C5A059' }}>
                 [ GLOBAL_LEADERBOARD ]
               </div>
               <table style={{ width: '100%', fontSize: '11px', borderCollapse: 'collapse', color: '#FDFDFB' }}>
                 <thead>
-                  <tr style={{ borderBottom: '1px solid var(--border-idle)', opacity: 0.55 }}>
-                    <th style={{ textAlign: 'left', padding: '6px 0' }}>MODE</th>
-                    <th style={{ textAlign: 'left', padding: '6px 0' }}>SCORE</th>
-                    <th style={{ textAlign: 'left', padding: '6px 0' }}>WPM</th>
-                    <th style={{ textAlign: 'left', padding: '6px 0' }}>ACC</th>
+                  <tr style={{ borderBottom: '1px solid #C5A059', opacity: 0.55 }}>
+                    <th style={{ textAlign: 'left', padding: '6px 0', color: '#C5A059' }}>MODE</th>
+                    <th style={{ textAlign: 'left', padding: '6px 0', color: '#C5A059' }}>SCORE</th>
+                    <th style={{ textAlign: 'left', padding: '6px 0', color: '#C5A059' }}>WPM</th>
+                    <th style={{ textAlign: 'left', padding: '6px 0', color: '#C5A059' }}>ACC</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -266,11 +266,11 @@ export const BentoHub: React.FC<BentoHubProps> = ({
                     </tr>
                   ) : (
                     getLeaderboardData().slice(0, 4).map((entry, idx) => (
-                      <tr key={idx} style={{ borderBottom: '1px dashed var(--border-idle)' }}>
-                        <td style={{ padding: '8px 0' }}>{entry.mode}</td>
-                        <td style={{ color: '#FDFDFB', fontWeight: 600 }}>{entry.score}</td>
-                        <td>{entry.wpm}</td>
-                        <td>{entry.accuracy}%</td>
+                      <tr key={idx} style={{ borderBottom: '1px dashed #C5A059' }}>
+                        <td style={{ padding: '8px 0', color: '#C5A059' }}>{entry.mode}</td>
+                        <td style={{ color: '#C5A059', fontWeight: 600 }}>{entry.score}</td>
+                        <td style={{ color: '#C5A059' }}>{entry.wpm}</td>
+                        <td style={{ color: '#C5A059' }}>{entry.accuracy}%</td>
                       </tr>
                     ))
                   )}
@@ -279,10 +279,10 @@ export const BentoHub: React.FC<BentoHubProps> = ({
             </div>
           ) : (
             <div>
-              <div style={{ fontSize: '10px', letterSpacing: '0.2em', opacity: 0.55, marginBottom: '12px', color: '#FDFDFB' }}>
+              <div style={{ fontSize: '10px', letterSpacing: '0.2em', marginBottom: '12px', color: '#C5A059' }}>
                 [ SESSION_INITIALIZATION ]
               </div>
-              <div style={{ fontSize: '12px', opacity: 0.75, color: '#FDFDFB', lineHeight: 1.6, marginBottom: '20px' }}>
+              <div style={{ fontSize: '12px', opacity: 0.85, color: '#C5A059', lineHeight: 1.6, marginBottom: '20px' }}>
                 Hover cursor within word focus zones to target. Type keystrokes with kinetic flow.
               </div>
 
@@ -322,12 +322,12 @@ export const BentoHub: React.FC<BentoHubProps> = ({
           </div>
         </div>
 
-        {/* MODULE 4: MODE CALIBRATION (Center-Right Priority, Col-span 5) — Bone White (#FDFDFB) */}
+        {/* MODULE 4: MODE CALIBRATION (Center-Right Priority, Col-span 5) — Gold (#C5A059) */}
         <div
           className="bento-module mode-module"
           style={{
             gridColumn: 'span 5',
-            border: '1px solid var(--border-idle)',
+            border: '1px solid #C5A059',
             borderRadius: '0px',
             padding: '24px',
             display: 'flex',
@@ -337,7 +337,7 @@ export const BentoHub: React.FC<BentoHubProps> = ({
           }}
         >
           <div>
-            <div style={{ fontSize: '10px', letterSpacing: '0.2em', opacity: 0.55, marginBottom: '14px', color: '#FDFDFB' }}>
+            <div style={{ fontSize: '10px', letterSpacing: '0.2em', marginBottom: '14px', color: '#C5A059' }}>
               [ MODE_CALIBRATION ]
             </div>
 
@@ -373,7 +373,7 @@ export const BentoHub: React.FC<BentoHubProps> = ({
             style={{
               marginTop: '16px',
               padding: '12px',
-              border: '1px solid var(--border-idle)',
+              border: '1px solid #C5A059',
               fontSize: '11px',
               lineHeight: 1.5,
               opacity: 0.75,

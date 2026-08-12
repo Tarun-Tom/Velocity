@@ -1,10 +1,11 @@
 /* Velocity — Resonant Stark Design System Styles */
 
 :root {
-  --gold-accent: #C5A059;
-  --bone-white: #FDFDFB;
-  --gold-tint: rgba(197, 160, 89, 0.12);
-  --border-hairline: 1px;
+  --gold-accent:        #C5A059;
+  --bone-white:         #FDFDFB;
+  --gold-tint:          rgba(197, 160, 89, 0.12);
+  --gold-kinetic-fill:  rgba(197, 160, 89, 0.10); /* Hover fill — all buttons */
+  --border-hairline:    1px;
 }
 
 body.dark-theme {
@@ -105,7 +106,7 @@ body.light-theme .corner-bracket {
   pointer-events: auto;
 }
 
-/* Velocity Button Styles — Strictly 1px solid Gold (#C5A059) border */
+/* Velocity Button Styles — Strictly 1px solid Gold (#C5A059) border & Gold Text */
 .velocity-btn {
   padding: 0.75rem 1.25rem;
   border-radius: 0px !important;
@@ -115,7 +116,7 @@ body.light-theme .corner-bracket {
   letter-spacing: 0.1em;
   background: transparent;
   border: 1px solid #C5A059 !important; /* Strictly 1px Gold border */
-  color: #FDFDFB;
+  color: #C5A059; /* All UI Buttons and their text strictly Gold */
   cursor: pointer;
   pointer-events: auto;
   display: inline-flex;
@@ -123,20 +124,25 @@ body.light-theme .corner-bracket {
   justify-content: center;
   gap: 8px;
   box-shadow: none;
-  transition: border-color 0.2s ease-out, color 0.2s ease-out, letter-spacing 0.2s ease-out;
+  transition:
+    border-color    0.18s ease-out,
+    color           0.18s ease-out,
+    letter-spacing  0.18s ease-out,
+    background-color 0.22s ease-out;
 }
 
 .velocity-btn:hover,
 .velocity-btn.hovered {
-  border-color: #C5A059 !important;
-  color: #FDFDFB !important;
-  letter-spacing: 0.15em;
+  border-color:     #C5A059 !important;
+  color:            #C5A059 !important;
+  background-color: var(--gold-kinetic-fill) !important; /* Kinetic Fill on hover */
+  letter-spacing:   0.15em;
 }
 
 .velocity-btn.active {
   border-color: #C5A059 !important;
-  color: #FDFDFB !important;
-  background: rgba(197, 160, 89, 0.12);
+  color: #C5A059 !important;
+  background: rgba(197, 160, 89, 0.16);
 }
 
 .begin-session-btn {
@@ -182,47 +188,81 @@ body.light-theme .corner-bracket {
 
 .stat-label {
   opacity: 0.55;
-  color: #FDFDFB;
+  color: #FDFDFB; /* Secondary Metadata: Bone White */
 }
 
 .stat-value {
   font-weight: 700;
-  color: #FDFDFB;
+  color: #C5A059; /* Primary Stat values: Gold */
 }
 
 .massive-wpm-container {
   position: fixed;
-  bottom: 32px;
+  bottom: 48px;          /* raised 16px to give the momentum bar room */
   right: 32px;
   font-family: 'Cormorant Garamond', serif;
   font-size: 7vw;
   font-weight: 700;
   font-style: italic;
-  color: #FDFDFB;
-  opacity: 0.04;
+  color: #C5A059;
+  opacity: 0.08;
   user-select: none;
   z-index: -1;
   pointer-events: none;
 }
 
+/* ── Momentum Bar — 1px Gold horizontal strip beneath Ghost WPM ──────────── */
+/* Width is mutated directly via ref (RAF loop). No React re-render overhead. */
+.momentum-bar-track {
+  position: fixed;
+  bottom: 40px;           /* 8px below the Ghost WPM baseline */
+  right: 32px;
+  width: 7vw;             /* matches Ghost WPM numeral width at 7vw font-size */
+  height: 1px;
+  background: rgba(197, 160, 89, 0.12); /* faint Gold track rail */
+  z-index: -1;
+  pointer-events: none;
+  overflow: hidden;
+}
+
+.momentum-bar-fill {
+  height: 100%;
+  width: 0%;              /* RAF writes this every frame — starts at 0 */
+  background: #C5A059;    /* solid Gold — drains left→right as window closes */
+  opacity: 0;
+  transform-origin: left center;
+  /* No CSS transition — RAF drives every frame for precision */
+}
+
 .ghost-synergy-flash {
   position: fixed;
-  bottom: 140px;
+  bottom: calc(48px + 7vw + 16px); /* above Ghost WPM — tracks same bottom anchor */
   right: 32px;
-  font-size: 1.5vw;
+  font-size: 11px;
   font-family: 'JetBrains Mono', monospace;
   font-weight: 700;
   letter-spacing: 2px;
-  opacity: 0.05;
-  color: #FDFDFB;
+  text-transform: uppercase;
+  opacity: 0;
+  color: #C5A059;
   user-select: none;
   z-index: 1;
-  transition: opacity 0.2s ease, text-shadow 0.2s ease;
+  pointer-events: none;
+  transition: opacity 0.15s ease-out, text-shadow 0.15s ease-out, transform 0.15s ease-out;
+  transform: translateY(4px);
 }
 
 .ghost-synergy-flash.active {
   opacity: 1;
-  text-shadow: 0 0 15px rgba(253, 253, 251, 0.5);
+  text-shadow: 0 0 18px rgba(197, 160, 89, 0.55);
+  transform: translateY(0px);
+}
+
+/* Perfect Synergy variant — spatial buffer bonus */
+.ghost-synergy-flash.perfect {
+  color: #D4AF37;   /* slightly warmer Gold for perfect distinction */
+  letter-spacing: 3px;
+  text-shadow: 0 0 24px rgba(212, 175, 55, 0.70);
 }
 
 .interactive-area {

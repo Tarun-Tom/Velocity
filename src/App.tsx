@@ -8,6 +8,7 @@ import { SessionArchive } from './components/SessionArchive';
 import { CinematicAtmosphere } from './components/CinematicAtmosphere';
 import { audioController } from './utils/audio';
 import { Volume2, VolumeX, Moon, Sun, RotateCcw } from 'lucide-react';
+import { useMouseMove } from './hooks/useMouseMove';
 import './App.css';
 
 interface WordItem {
@@ -50,12 +51,22 @@ const WORD_POOL = [
   'Auto-layout', 'Subgrid', 'Custom-properties', 'Keyframes', 'SVG', 'WebGL', 'Rasterization'
 ];
 
+// ── Synergy constants ──────────────────────────────────────────────────────────
+// SynergyWindow = BASE_SYNERGY_MS + (distance / VELOCITY_CONSTANT)
+// A word 600px away gives ~1100ms window; a word 60px away gives ~600ms.
+const BASE_SYNERGY_MS   = 500;
+const VELOCITY_CONSTANT = 1.1;  // px/ms — calibrated to a comfortable cursor speed
+
 function App() {
   const [theme, setTheme] = useState<'light' | 'dark'>('dark');
   const [isPlaying, setIsPlaying] = useState(false);
   const [isGameOver, setIsGameOver] = useState(false);
   const [showLeaderboard, setShowLeaderboard] = useState(false);
   const [muted, setMuted] = useState(false);
+
+  // Consolidated mouse listener hook (origin: Viewport Center, Stiffness: 100, Damping: 20)
+  const mouseState = useMouseMove();
+  const mousePos = { x: mouseState.x, y: mouseState.y };
   
   // Game Mode State
   const [gameMode, setGameMode] = useState<GameMode>('Chrono');
@@ -77,7 +88,38 @@ function App() {
   const [flowStreak, setFlowStreak] = useState(0);
   const [synergyPoints, setSynergyPoints] = useState(0);
   const [showSynergyFlash, setShowSynergyFlash] = useState(false);
-  
+
+  // ── Distance-Aware Synergy Window ─────────────────────────────────────────
+  // Holds the computed window duration for the current inter-word transit.
+  // Updated on every word completion — read in the key handler without re-binding.
+  const synergyWindowRef = useRef<number>(BASE_SYNERGY_MS);
+
+  // Position of the last completed word — used to compute distance to the next
+  // word the user begins typing, which sets the synergy window size.
+  const lastWordPosRef = useRef<{ x: number; y: number } | null>(null);
+
+  // Spatial buffer flag: mouse already inside next word's radius when current
+  // word is completed → automatic Perfect Synergy on the next word acquired.
+  const spatialBufferRef = useRef<boolean>(false);
+
+  // ── Momentum Bar ──────────────────────────────────────────────────────────
+  // Filled (100%) when a synergy streak is active, drains to 0 when window expires.
+  // Written to a DOM element via direct style mutation to avoid React re-renders.
+  const momentumBarRef = useRef<HTMLDivElement>(null);
+  const momentumAnimRef = useRef<number | null>(null);
+
+  // ── Synergy Ping (Neural Tether guide pulse) ──────────────────────────────
+  // When a word is completed, we briefly broadcast the completed word's position
+  // + the nearest next candidate to BackgroundGrid for a 200ms Gold guide line.
+  const [synergyPing, setSynergyPing] = useState<{
+    fromX: number; fromY: number;
+    toX: number;   toY: number;
+    time: number;
+  } | null>(null);
+
+  // Perfect Synergy flag — true when spatial buffer bonus was granted this acquisition
+  const [isPerfectSynergy, setIsPerfectSynergy] = useState(false);
+
   // Friction State
   const [frictionActive, setFrictionActive] = useState(false);
 
@@ -95,12 +137,13 @@ function App() {
   // Moving Average tracking for Ghost WPM (2-second window)
   const keystrokesTimeline = useRef<{ timestamp: number; keys: number }[]>([]);
 
-  // Mouse coordinate state
-  const [mousePos, setMousePos] = useState({ x: -1000, y: -1000 });
-
   // Timeouts Refs
   const frictionTimeoutRef = useRef<any>(null);
   const synergyFlashTimeoutRef = useRef<any>(null);
+  // Momentum decay — separated into timeout (grace period) and interval (drip decrement)
+  // so we can cancel each independently without the clearInterval-on-setTimeout bug.
+  const momentumDecayTimeoutRef = useRef<any>(null);
+  const momentumDecayRef = useRef<any>(null);
 
   // Keep references to avoid re-binding keyboard listeners
   const stateRef = useRef({
@@ -164,26 +207,44 @@ function App() {
     document.body.className = `${theme}-theme`;
   }, [theme]);
 
-  // Handle Mouse Move & Record Trajectory Signature
+  // Record mouse trajectory signature when game is active
   useEffect(() => {
-    const handleMouseMove = (e: MouseEvent) => {
-      setMousePos({ x: e.clientX, y: e.clientY });
-      
-      // Record mouse path for Visual Signature if game is active
-      if (stateRef.current.isPlaying) {
-        mousePathRef.current.push({ x: e.clientX, y: e.clientY });
-      }
-    };
-    window.addEventListener('mousemove', handleMouseMove);
-    return () => window.removeEventListener('mousemove', handleMouseMove);
-  }, []);
+    if (isPlaying) {
+      mousePathRef.current.push({ x: mouseState.x, y: mouseState.y });
+    }
+  }, [mouseState.x, mouseState.y, isPlaying]);
 
   // Cleanup timeouts on unmount
   useEffect(() => {
     return () => {
       if (frictionTimeoutRef.current) clearTimeout(frictionTimeoutRef.current);
       if (synergyFlashTimeoutRef.current) clearTimeout(synergyFlashTimeoutRef.current);
+      if (momentumDecayTimeoutRef.current) clearTimeout(momentumDecayTimeoutRef.current);
+      if (momentumDecayRef.current) clearInterval(momentumDecayRef.current);
+      if (momentumAnimRef.current) cancelAnimationFrame(momentumAnimRef.current);
     };
+  }, []);
+
+  // ── Momentum Bar RAF animator ──────────────────────────────────────────────
+  // Runs once after each synergy event, draining the bar over the window duration.
+  // Written directly to the DOM node — zero React overhead per frame.
+  const animateMomentumBar = useCallback((windowMs: number) => {
+    if (momentumAnimRef.current) cancelAnimationFrame(momentumAnimRef.current);
+    const start = Date.now();
+    const tick = () => {
+      const elapsed = Date.now() - start;
+      const pct = Math.max(0, 1 - elapsed / windowMs);
+      if (momentumBarRef.current) {
+        momentumBarRef.current.style.width = `${pct * 100}%`;
+        momentumBarRef.current.style.opacity = pct > 0.05 ? '1' : '0';
+      }
+      if (pct > 0) {
+        momentumAnimRef.current = requestAnimationFrame(tick);
+      } else {
+        momentumAnimRef.current = null;
+      }
+    };
+    momentumAnimRef.current = requestAnimationFrame(tick);
   }, []);
 
   // Game Loop for Timer
@@ -210,10 +271,15 @@ function App() {
     setIsGameOver(true);
     setIsPlaying(false);
     setFocusedWordId(null);
+    // Kill any running momentum decay (both the grace-period timeout and the drip interval)
+    if (momentumDecayTimeoutRef.current) clearTimeout(momentumDecayTimeoutRef.current);
+    if (momentumDecayRef.current) clearInterval(momentumDecayRef.current);
+    if (momentumAnimRef.current) cancelAnimationFrame(momentumAnimRef.current);
+    if (momentumBarRef.current) momentumBarRef.current.style.width = '0%';
   };
 
-  // Proximity checker helper
-  const isWithinRadius = useCallback((x1: number, y1: number, x2: number, y2: number, r = 150) => {
+  // Proximity checker helper (synchronized 180px radius)
+  const isWithinRadius = useCallback((x1: number, y1: number, x2: number, y2: number, r = 180) => {
     const dx = x1 - x2;
     const dy = y1 - y2;
     return dx * dx + dy * dy <= r * r;
@@ -308,8 +374,11 @@ function App() {
       spawnAttempts++;
     }
 
+    // Stable ID: epoch-ms prefix ensures uniqueness across sessions;
+    // the word text is embedded so the key never changes for the same word
+    // during a mono→serif transition (the WordNode key is the word's id from App state).
     return {
-      id: Math.random().toString(36).substring(2, 9),
+      id: `${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
       word: randomWord,
       x: pos.x,
       y: pos.y,
@@ -345,10 +414,20 @@ function App() {
     setFlowStreak(0);
     setSynergyPoints(0);
     setShowSynergyFlash(false);
+    setIsPerfectSynergy(false);
     setFrictionActive(false);
     setImplosion(null);
+    setSynergyPing(null);
     setShowLeaderboard(false);
     keystrokesTimeline.current = [];
+    synergyWindowRef.current = BASE_SYNERGY_MS;
+    lastWordPosRef.current = null;
+    spatialBufferRef.current = false;
+
+    if (momentumDecayTimeoutRef.current) clearTimeout(momentumDecayTimeoutRef.current);
+    if (momentumDecayRef.current) clearInterval(momentumDecayRef.current);
+    if (momentumAnimRef.current) cancelAnimationFrame(momentumAnimRef.current);
+    if (momentumBarRef.current) momentumBarRef.current.style.width = '0%';
 
     if (gameMode === 'Chrono') {
       setTimeLeft(60);
@@ -388,16 +467,86 @@ function App() {
             setCorrectKeys(prev => prev + 1);
 
             if (nextLength === targetWord.word.length) {
+              // ── Word completed ───────────────────────────────────────────
               if (!current.muted) audioController.playThud();
               setCompletedWordsCount(prev => prev + 1);
-              setLastCompletionTime(Date.now());
-              setImplosion({ x: targetWord.x, y: targetWord.y, time: Date.now() });
+
+              const completedAt = Date.now();
+              setLastCompletionTime(completedAt);
+              setImplosion({ x: targetWord.x, y: targetWord.y, time: completedAt });
               
               if (current.gameMode === 'Overdrive') {
                 setTimeLeft(prev => prev + 3);
               }
 
               const updatedWords = current.words.filter(w => w.id !== current.focusedWordId);
+
+              // ── Spatial buffer check ──────────────────────────────────────
+              // If the cursor is already inside the radius of another word at
+              // completion time, flag for automatic Perfect Synergy on acquisition.
+              const preBufferedWord = updatedWords.find(w =>
+                isWithinRadius(w.x, w.y, current.mousePos.x, current.mousePos.y)
+              );
+              spatialBufferRef.current = !!preBufferedWord;
+
+              // ── Distance-Aware Synergy Window ─────────────────────────────
+              // Compute the distance between the just-completed word and the
+              // nearest remaining word. The window scales with that distance so
+              // long transits get proportionally more time.
+              const nearestWord = updatedWords.reduce<WordItem | null>((best, w) => {
+                const dx = w.x - targetWord.x;
+                const dy = w.y - targetWord.y;
+                const d  = Math.sqrt(dx * dx + dy * dy);
+                if (!best) return w;
+                const bx = best.x - targetWord.x;
+                const by = best.y - targetWord.y;
+                return d < Math.sqrt(bx * bx + by * by) ? w : best;
+              }, null);
+
+              const transitDist = nearestWord
+                ? Math.sqrt(
+                    (nearestWord.x - targetWord.x) ** 2 +
+                    (nearestWord.y - targetWord.y) ** 2
+                  )
+                : 0;
+
+              // SynergyWindow = BaseTime + (distance / VelocityConstant)
+              const newWindow = BASE_SYNERGY_MS + transitDist / VELOCITY_CONSTANT;
+              synergyWindowRef.current = newWindow;
+
+              // Store completed word position for next acquisition distance check
+              lastWordPosRef.current = { x: targetWord.x, y: targetWord.y };
+
+              // ── Neural Tether ping (200ms Gold guide line) ──────────────
+              if (nearestWord) {
+                setSynergyPing({
+                  fromX: targetWord.x,
+                  fromY: targetWord.y,
+                  toX: nearestWord.x,
+                  toY: nearestWord.y,
+                  time: completedAt,
+                });
+              }
+
+              // ── Momentum decay: grace period ─────────────────────────────
+              // After the window expires, reduce streak by 1 every 500ms
+              // instead of zeroing it instantly.
+              if (momentumDecayRef.current) clearInterval(momentumDecayRef.current);
+              momentumDecayRef.current = setTimeout(() => {
+                momentumDecayRef.current = setInterval(() => {
+                  setFlowStreak(prev => {
+                    if (prev <= 0) {
+                      clearInterval(momentumDecayRef.current);
+                      return 0;
+                    }
+                    return prev - 1;
+                  });
+                }, 500);
+              }, newWindow);
+
+              // Start the Momentum Bar animation draining over the window
+              animateMomentumBar(newWindow);
+
               const mouseQuad = getQuadrant(current.mousePos.x, current.mousePos.y);
               const availableQuads = [1, 2, 3, 4].filter(q => q !== mouseQuad);
               const targetQuad = availableQuads[Math.floor(Math.random() * availableQuads.length)];
@@ -412,6 +561,7 @@ function App() {
             }
             return;
           } else {
+            // Incorrect char while focused: friction flash only — streak decays naturally
             setIncorrectKeys(prev => prev + 1);
             setFrictionActive(true);
             if (frictionTimeoutRef.current) clearTimeout(frictionTimeoutRef.current);
@@ -434,10 +584,26 @@ function App() {
         setFocusedWordId(matchingWord.id);
         setCorrectKeys(prev => prev + 1);
 
-        const elapsedSinceLastCompletion = current.lastCompletionTime ? (Date.now() - current.lastCompletionTime) : Infinity;
-        if (elapsedSinceLastCompletion < 500) {
+        // ── Synergy acquisition check ─────────────────────────────────────
+        // Window is now distance-aware (computed at previous completion).
+        // Spatial buffer: if flagged, grant Perfect Synergy regardless of elapsed time.
+        // Capture wasPerfect BEFORE consuming the flag so it reads the real value.
+        const wasPerfect = spatialBufferRef.current;
+        const elapsedSinceLastCompletion = current.lastCompletionTime
+          ? Date.now() - current.lastCompletionTime
+          : Infinity;
+        const withinWindow = elapsedSinceLastCompletion < synergyWindowRef.current;
+        const isSynergy = withinWindow || wasPerfect;
+        spatialBufferRef.current = false; // consume the buffer flag
+
+        if (isSynergy) {
+          // Kill momentum decay since the streak is continuing
+          if (momentumDecayTimeoutRef.current) clearTimeout(momentumDecayTimeoutRef.current);
+          if (momentumDecayRef.current) clearInterval(momentumDecayRef.current);
+
           setFlowStreak(prev => prev + 1);
           setSynergyPoints(prev => prev + 1);
+          setIsPerfectSynergy(wasPerfect);
           setShowSynergyFlash(true);
           
           if (current.gameMode === 'Overdrive') {
@@ -447,17 +613,21 @@ function App() {
           if (synergyFlashTimeoutRef.current) clearTimeout(synergyFlashTimeoutRef.current);
           synergyFlashTimeoutRef.current = setTimeout(() => {
             setShowSynergyFlash(false);
-          }, 1000);
-        } else {
-          setFlowStreak(0);
+            setIsPerfectSynergy(false);
+          }, 900);
         }
+        // No else-branch: decay handles gradual streak reduction; only a miss (below) zeros it.
 
         setWords(prev =>
           prev.map(w => (w.id === matchingWord.id ? { ...w, typedLength: 1 } : w))
         );
       } else {
+        // Miss while unfocused: zero streak immediately and cancel all decay timers
         setIncorrectKeys(prev => prev + 1);
         setFlowStreak(0);
+        if (momentumDecayTimeoutRef.current) clearTimeout(momentumDecayTimeoutRef.current);
+        if (momentumDecayRef.current) clearInterval(momentumDecayRef.current);
+        if (momentumBarRef.current) momentumBarRef.current.style.width = '0%';
         setFrictionActive(true);
         if (frictionTimeoutRef.current) clearTimeout(frictionTimeoutRef.current);
         frictionTimeoutRef.current = setTimeout(() => {
@@ -468,13 +638,15 @@ function App() {
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isPlaying, spawnWord, isWithinRadius, getQuadrant]);
+  }, [isPlaying, spawnWord, isWithinRadius, getQuadrant, animateMomentumBar]);
 
   useEffect(() => {
     if (!focusedWordId || !isPlaying) return;
     const active = words.find(w => w.id === focusedWordId);
+    // Release focus only if cursor leaves the 180px radius around the RAW home position.
+    // The parallax offset is visual-only and must NOT affect the lock radius.
     if (active) {
-      const stillTypable = isWithinRadius(active.x, active.y, mousePos.x, mousePos.y, 200); 
+      const stillTypable = isWithinRadius(active.x, active.y, mousePos.x, mousePos.y, 180);
       if (!stillTypable) {
         setFocusedWordId(null);
       }
@@ -590,12 +762,13 @@ function App() {
           words={words.map(w => ({
             x: w.x + fgParallaxX,
             y: w.y + fgParallaxY,
-            isTypable: isWithinRadius(w.x + fgParallaxX, w.y + fgParallaxY, mousePos.x, mousePos.y),
+            isTypable: isWithinRadius(w.x, w.y, mousePos.x, mousePos.y),
             isFocused: w.id === focusedWordId,
           }))}
           implosion={implosion}
           frictionActive={frictionActive}
           mousePos={mousePos}
+          synergyPing={synergyPing}
         />
 
         {/* Interactive Word Nodes Space */}
@@ -605,12 +778,15 @@ function App() {
               <WordNode
                 key={w.id}
                 word={w.word}
-                x={w.x + fgParallaxX}
-                y={w.y + fgParallaxY}
+                x={w.x}
+                y={w.y}
                 typedLength={w.typedLength}
-                isTypable={isWithinRadius(w.x + fgParallaxX, w.y + fgParallaxY, mousePos.x, mousePos.y)}
+                isTypable={isWithinRadius(w.x, w.y, mousePos.x, mousePos.y)}
                 isFocused={w.id === focusedWordId}
                 theme={theme}
+                mousePos={mousePos}
+                parallaxX={fgParallaxX}
+                parallaxY={fgParallaxY}
               />
             ))}
         </div>
@@ -689,7 +865,7 @@ function App() {
               )}
             </div>
 
-            {/* Bottom-Right / Background: Ghost WPM */}
+            {/* Bottom-Right / Background: Ghost WPM + Momentum Bar */}
             <div 
               className="massive-wpm-container" 
               style={{ 
@@ -698,13 +874,26 @@ function App() {
             >
               {currentWpm > 0 ? currentWpm : '00'}
             </div>
+
+            {/*
+             * Momentum Bar — 1px Gold horizontal strip that drains over the
+             * synergy window duration. Positioned directly beneath the Ghost WPM.
+             * Width is mutated directly via ref to avoid re-renders.
+             */}
+            <div
+              className="momentum-bar-track"
+              style={{ transform: `translate(${bgParallaxX}px, ${bgParallaxY}px)` }}
+            >
+              <div ref={momentumBarRef} className="momentum-bar-fill" />
+            </div>
+
             <div 
-              className={`ghost-synergy-flash ${showSynergyFlash ? 'active' : ''}`} 
+              className={`ghost-synergy-flash ${showSynergyFlash ? 'active' : ''} ${isPerfectSynergy ? 'perfect' : ''}`} 
               style={{ 
                 transform: `translate(${bgParallaxX}px, ${bgParallaxY}px)`
               }}
             >
-              {synergyPoints} SYNERGY
+              {isPerfectSynergy ? 'PERFECT' : `${synergyPoints} SYNERGY`}
             </div>
           </div>
         )}
@@ -742,8 +931,32 @@ function App() {
             mousePath={mousePathRef.current}
             onRecalibrate={initializeGame}
             onReturnToNucleus={() => {
+              // Full state reset — return to clean hub screen
               setIsGameOver(false);
               setIsPlaying(false);
+              setWords([]);
+              setFocusedWordId(null);
+              setCorrectKeys(0);
+              setIncorrectKeys(0);
+              setCompletedWordsCount(0);
+              setStartTime(null);
+              setCurrentWpm(0);
+              setPeakWpm(0);
+              setLastCompletionTime(null);
+              setFlowStreak(0);
+              setSynergyPoints(0);
+              setShowSynergyFlash(false);
+              setIsPerfectSynergy(false);
+              setFrictionActive(false);
+              setImplosion(null);
+              setSynergyPing(null);
+              setShowLeaderboard(false);
+              if (momentumDecayTimeoutRef.current) clearTimeout(momentumDecayTimeoutRef.current);
+              if (momentumDecayRef.current) clearInterval(momentumDecayRef.current);
+              if (momentumAnimRef.current) cancelAnimationFrame(momentumAnimRef.current);
+              if (momentumBarRef.current) momentumBarRef.current.style.width = '0%';
+              keystrokesTimeline.current = [];
+              mousePathRef.current = [];
             }}
             theme={theme}
           />

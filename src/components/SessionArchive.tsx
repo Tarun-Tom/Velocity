@@ -128,12 +128,12 @@ export const SessionArchive: React.FC<SessionArchiveProps> = ({
           color: '#FDFDFB',
         }}
       >
-        {/* Header Module (Col-span 12) — Bone White (#FDFDFB) */}
+        {/* Header Module (Col-span 12) — Gold (#C5A059) */}
         <div
           className="bento-box archive-header-box"
           style={{
             gridColumn: 'span 12',
-            border: '1px solid var(--border-idle)',
+            border: '1px solid #C5A059',
             borderRadius: '0px',
             padding: '20px 24px',
             display: 'flex',
@@ -146,7 +146,7 @@ export const SessionArchive: React.FC<SessionArchiveProps> = ({
             <div style={{ fontSize: '11px', letterSpacing: '0.2em', opacity: 0.55, marginBottom: '4px', color: '#FDFDFB' }}>
               [ TELEMETRY_PROTOCOL ]
             </div>
-            <div style={{ fontSize: '22px', fontWeight: 700, letterSpacing: '0.15em', color: '#FDFDFB' }}>
+            <div style={{ fontSize: '22px', fontWeight: 700, letterSpacing: '0.15em', color: '#C5A059' }}>
               [ SESSION_ARCHIVE ]
             </div>
           </div>
@@ -154,7 +154,7 @@ export const SessionArchive: React.FC<SessionArchiveProps> = ({
             <div style={{ fontSize: '11px', letterSpacing: '0.15em', opacity: 0.55, color: '#FDFDFB' }}>
               MODE: {gameMode.toUpperCase()}
             </div>
-            <div style={{ fontSize: '18px', fontWeight: 700, color: '#FDFDFB', marginTop: '2px' }}>
+            <div style={{ fontSize: '18px', fontWeight: 700, color: '#C5A059', marginTop: '2px' }}>
               TOTAL SCORE: {score} PTS
             </div>
           </div>
@@ -165,7 +165,7 @@ export const SessionArchive: React.FC<SessionArchiveProps> = ({
           className="bento-box visual-signature-box"
           style={{
             gridColumn: 'span 12',
-            border: '1px solid var(--border-idle)',
+            border: '1px solid #C5A059',
             borderRadius: '0px',
             padding: '24px',
             position: 'relative',
@@ -182,8 +182,7 @@ export const SessionArchive: React.FC<SessionArchiveProps> = ({
               left: '20px',
               fontSize: '10px',
               letterSpacing: '0.2em',
-              opacity: 0.6,
-              color: '#FDFDFB',
+              color: '#C5A059',
               textTransform: 'uppercase',
             }}
           >
@@ -222,7 +221,7 @@ export const SessionArchive: React.FC<SessionArchiveProps> = ({
               right: '20px',
               fontSize: '9px',
               letterSpacing: '0.15em',
-              opacity: 0.45,
+              opacity: 0.55,
               color: '#FDFDFB',
             }}
           >
@@ -230,21 +229,21 @@ export const SessionArchive: React.FC<SessionArchiveProps> = ({
           </div>
         </div>
 
-        {/* Bento Data Module 1: [ PEAK_VELOCITY ] (Col-span 4) — Bone White (#FDFDFB) */}
+        {/* Bento Data Module 1: [ PEAK_VELOCITY ] (Col-span 4) — Gold (#C5A059) */}
         <div
           className="bento-box metric-box"
           style={{
             gridColumn: 'span 4',
-            border: '1px solid var(--border-idle)',
+            border: '1px solid #C5A059',
             borderRadius: '0px',
             padding: '20px',
             background: theme === 'dark' ? 'rgba(0, 0, 0, 0.85)' : 'rgba(253, 253, 251, 0.85)',
           }}
         >
-          <div style={{ fontSize: '10px', letterSpacing: '0.2em', opacity: 0.55, marginBottom: '12px', color: '#FDFDFB' }}>
+          <div style={{ fontSize: '10px', letterSpacing: '0.2em', marginBottom: '12px', color: '#C5A059' }}>
             [ PEAK_VELOCITY ]
           </div>
-          <div style={{ fontSize: '36px', fontWeight: 700, color: '#FDFDFB', lineHeight: 1 }}>
+          <div style={{ fontSize: '36px', fontWeight: 700, color: '#C5A059', lineHeight: 1 }}>
             {peakWpm || wpm} <span style={{ fontSize: '12px', opacity: 0.65 }}>WPM</span>
           </div>
           <div style={{ fontSize: '11px', marginTop: '12px', opacity: 0.75, color: '#FDFDFB', display: 'flex', justifyContent: 'space-between' }}>
@@ -253,21 +252,21 @@ export const SessionArchive: React.FC<SessionArchiveProps> = ({
           </div>
         </div>
 
-        {/* Bento Data Module 2: [ PRECISION_INDEX ] (Col-span 4) — Bone White (#FDFDFB) */}
+        {/* Bento Data Module 2: [ PRECISION_INDEX ] (Col-span 4) — Gold (#C5A059) */}
         <div
           className="bento-box metric-box"
           style={{
             gridColumn: 'span 4',
-            border: '1px solid var(--border-idle)',
+            border: '1px solid #C5A059',
             borderRadius: '0px',
             padding: '20px',
             background: theme === 'dark' ? 'rgba(0, 0, 0, 0.85)' : 'rgba(253, 253, 251, 0.85)',
           }}
         >
-          <div style={{ fontSize: '10px', letterSpacing: '0.2em', opacity: 0.55, marginBottom: '12px', color: '#FDFDFB' }}>
+          <div style={{ fontSize: '10px', letterSpacing: '0.2em', marginBottom: '12px', color: '#C5A059' }}>
             [ PRECISION_INDEX ]
           </div>
-          <div style={{ fontSize: '36px', fontWeight: 700, color: '#FDFDFB', lineHeight: 1 }}>
+          <div style={{ fontSize: '36px', fontWeight: 700, color: '#C5A059', lineHeight: 1 }}>
             {accuracy}%
           </div>
           <div style={{ fontSize: '11px', marginTop: '12px', opacity: 0.75, color: '#FDFDFB', display: 'flex', justifyContent: 'space-between' }}>
@@ -276,21 +275,21 @@ export const SessionArchive: React.FC<SessionArchiveProps> = ({
           </div>
         </div>
 
-        {/* Bento Data Module 3: [ SYNERGY_FLOW ] (Col-span 4) — Bone White (#FDFDFB) */}
+        {/* Bento Data Module 3: [ SYNERGY_FLOW ] (Col-span 4) — Gold (#C5A059) */}
         <div
           className="bento-box metric-box"
           style={{
             gridColumn: 'span 4',
-            border: '1px solid var(--border-idle)',
+            border: '1px solid #C5A059',
             borderRadius: '0px',
             padding: '20px',
             background: theme === 'dark' ? 'rgba(0, 0, 0, 0.85)' : 'rgba(253, 253, 251, 0.85)',
           }}
         >
-          <div style={{ fontSize: '10px', letterSpacing: '0.2em', opacity: 0.55, marginBottom: '12px', color: '#FDFDFB' }}>
+          <div style={{ fontSize: '10px', letterSpacing: '0.2em', marginBottom: '12px', color: '#C5A059' }}>
             [ SYNERGY_FLOW ]
           </div>
-          <div style={{ fontSize: '36px', fontWeight: 700, color: '#FDFDFB', lineHeight: 1 }}>
+          <div style={{ fontSize: '36px', fontWeight: 700, color: '#C5A059', lineHeight: 1 }}>
             x{flowStreak} <span style={{ fontSize: '12px', opacity: 0.65 }}>STREAK</span>
           </div>
           <div style={{ fontSize: '11px', marginTop: '12px', opacity: 0.75, color: '#FDFDFB', display: 'flex', justifyContent: 'space-between' }}>
@@ -304,7 +303,7 @@ export const SessionArchive: React.FC<SessionArchiveProps> = ({
           className="bento-box archive-cta-box"
           style={{
             gridColumn: 'span 12',
-            border: '1px solid var(--border-idle)',
+            border: '1px solid #C5A059',
             borderRadius: '0px',
             padding: '20px 24px',
             display: 'flex',

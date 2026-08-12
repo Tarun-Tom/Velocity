@@ -16,10 +16,14 @@ export const VariableTitle: React.FC<VariableTitleProps> = ({
 
   const rawProximity = useMotionValue(0);
 
+  // ── Liquid Glass Spring ────────────────────────────────────────────────────
+  // stiffness: 40, damping: 20 → the title weight moves like heavy glass —
+  // slow to start, slow to settle. A continuous breathing between Thin and Bold
+  // that tracks the cursor without snapping.
   const smoothProximity = useSpring(rawProximity, {
-    stiffness: 180,
-    damping: 22,
-    mass: 0.5,
+    stiffness: 40,
+    damping: 20,
+    mass: 1.4,
   });
 
   const fontWeight = useTransform(smoothProximity, [0, 1], [100, 900]);
@@ -29,11 +33,13 @@ export const VariableTitle: React.FC<VariableTitleProps> = ({
     (v) => `'wght' ${Math.round(100 + v * 800)}`
   );
 
-  const letterSpacing = useTransform(smoothProximity, [0, 1], ['0.35em', '0.14em']);
+  // Tracking compresses as weight grows — mirrors natural type behavior
+  const letterSpacing = useTransform(smoothProximity, [0, 1], ['0.38em', '0.10em']);
 
+  // Gold glow breathes in with the weight — subtle at low proximity, strong at peak
   const textShadow = useTransform(smoothProximity, (v) =>
-    v > 0.2
-      ? `0 0 ${Math.round(v * 16)}px rgba(197, 160, 89, ${v * 0.65})`
+    v > 0.1
+      ? `0 0 ${Math.round(v * 22)}px rgba(197, 160, 89, ${(v * 0.7).toFixed(2)})`
       : 'none'
   );
 
@@ -55,9 +61,11 @@ export const VariableTitle: React.FC<VariableTitleProps> = ({
     const maxDist = 380;
     const proximity = Math.max(0, Math.min(1, 1 - dist / maxDist));
 
-    const smoothFactor = Math.pow(proximity, 1.6);
+    // Exponent 1.5 — gradual onset, stronger as you get close
+    const smoothFactor = Math.pow(proximity, 1.5);
     rawProximity.set(smoothFactor);
   }, [mousePos, rawProximity]);
+
 
   return (
     <motion.div
@@ -78,7 +86,7 @@ export const VariableTitle: React.FC<VariableTitleProps> = ({
         userSelect: 'none',
       }}
     >
-      VELOCITY
+      V E L O C I T Y
     </motion.div>
   );
 };

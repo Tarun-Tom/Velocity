@@ -142,17 +142,17 @@ export const BentoHub: React.FC<BentoHubProps> = ({
       }}
     >
       {/*
-        12-COLUMN STRUCTURAL GRID LOCK
+        12-COLUMN SYMMETRICAL BENTO HUB GRID
         ─────────────────────────────────────────────
-        Row 1 (h-[300px]):
-          [Module A: Title]         -> col-span-8
-          [Module B: Records]       -> col-span-4
-        Row 2 (h-[400px]):
-          [Module C: Begin Session] -> col-span-4
-          [Module D: Protocol]      -> col-span-4
-          [Module E: Modes]         -> col-span-4
+        Top Row (Height: 320px):
+          [Module 1: Title]       -> col-span-8
+          [Module 2: Records]     -> col-span-4
+        Bottom Row (Height: 420px):
+          [Module 3: Protocol]    -> col-span-4
+          [Module 4: Begin Slab]  -> col-span-4
+          [Module 5: Modes]       -> col-span-4
         ─────────────────────────────────────────────
-        Gap: 16px (gap-4). Fixed max-w-7xl (1280px).
+        Gap: 16px (1rem). Max width: 1280px.
       */}
       <div
         className="bento-container"
@@ -161,16 +161,21 @@ export const BentoHub: React.FC<BentoHubProps> = ({
           maxWidth: 1280,
           display: 'grid',
           gridTemplateColumns: 'repeat(12, 1fr)',
-          gridTemplateRows: 'auto auto',
           gap: '1rem',
           alignItems: 'stretch',
         }}
       >
 
-        {/* ─── MODULE A: TITLE ─── col-span-8, row 1 ──────────────────────────────── */}
+        {/* ─── MODULE 1: TITLE ─── col-span-8, row 1 (320px) ──────────────────────── */}
         <Module
           theme={theme}
-          style={{ gridColumn: 'span 8', gridRow: 1, height: 300, display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}
+          style={{
+            gridColumn: 'span 8',
+            height: 320,
+            display: 'flex',
+            flexDirection: 'column',
+            justifyContent: 'space-between',
+          }}
         >
           <div>
             {/* Top meta row */}
@@ -235,10 +240,15 @@ export const BentoHub: React.FC<BentoHubProps> = ({
           </div>
         </Module>
 
-        {/* ─── MODULE B: RECORD_ARCHIVE ─── col-span-4, row 1 ────────────────────── */}
+        {/* ─── MODULE 2: RECORDS ─── col-span-4, row 1 (320px) ───────────────────── */}
         <Module
           theme={theme}
-          style={{ gridColumn: 'span 4', gridRow: 1, height: 300, display: 'flex', flexDirection: 'column' }}
+          style={{
+            gridColumn: 'span 4',
+            height: 320,
+            display: 'flex',
+            flexDirection: 'column',
+          }}
         >
           <ModuleTag>[ RECORD_ARCHIVE ]</ModuleTag>
 
@@ -299,21 +309,64 @@ export const BentoHub: React.FC<BentoHubProps> = ({
           )}
         </Module>
 
-        {/* ─── MODULE C: BEGIN_SESSION ─── col-span-4, row 2 ────────────────────── */}
+        {/* ─── MODULE 3: PROTOCOL ─── col-span-4, row 2 (420px) ───────────────────── */}
+        <Module
+          theme={theme}
+          className="bottom-row-module protocol-module"
+          style={{
+            gridColumn: 'span 4',
+            height: 420,
+            display: 'flex',
+            flexDirection: 'column',
+            justifyContent: 'flex-start',
+          }}
+          noHover
+        >
+          <ModuleTag>[ 00_PROTOCOL ]</ModuleTag>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+            {[
+              '01_LOCATE: ALIGN CURSOR TO NODE RADIUS',
+              '02_CALIBRATE: GILD CHARACTERS VIA INPUT',
+              '03_VELOCITY: MAINTAIN SYNERGY FOR KINETIC STREAK',
+            ].map((line) => (
+              <div
+                key={line}
+                className="protocol-item"
+                style={{
+                  fontSize: 10,
+                  lineHeight: 1.6,
+                  color: txt,
+                  letterSpacing: '0.12em',
+                  fontFamily: "'JetBrains Mono', monospace",
+                  opacity: 0.85,
+                  borderLeft: '1px solid rgba(197,160,89,0.5)',
+                  paddingLeft: 12,
+                }}
+              >
+                {line}
+              </div>
+            ))}
+          </div>
+          {/* Status strip top-aligned in lower flow space */}
+          <div style={{ marginTop: 24, paddingTop: 16, borderTop: '1px solid rgba(197,160,89,0.25)', fontSize: 10, opacity: 0.45, color: txt, letterSpacing: '0.1em' }}>
+            STATUS: CALIBRATED — PRESS ENTER TO COMMENCE
+          </div>
+        </Module>
+
+        {/* ─── MODULE 4: BEGIN SESSION (GOLD SLAB) ── col-span-4, row 2 (420px) ───── */}
         <Module
           theme={theme}
           className="begin-session-slab bottom-row-module"
           style={{
             gridColumn: 'span 4',
-            gridRow: 2,
-            height: 400,
+            height: 420,
             display: 'flex',
             flexDirection: 'column',
             justifyContent: 'space-between',
           }}
           noHover
         >
-          {/* Main Solid Gold Slab Button */}
+          {/* Solid Gold Slab Button - Center Fix */}
           <button
             onClick={onBeginSession}
             onMouseEnter={() => setIsBeginHovered(true)}
@@ -328,6 +381,7 @@ export const BentoHub: React.FC<BentoHubProps> = ({
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
+              textAlign: 'center',
               flexDirection: 'column',
               gap: 12,
               cursor: 'pointer',
@@ -339,22 +393,23 @@ export const BentoHub: React.FC<BentoHubProps> = ({
               fontFamily: "'JetBrains Mono', monospace",
             }}
           >
-            <span style={{ fontSize: 26, fontWeight: 800, letterSpacing: '0.15em' }}>▶</span>
-            [ BEGIN_SESSION ]
+            <span style={{ fontSize: 26, fontWeight: 800, letterSpacing: '0.15em', lineHeight: 1 }}>▶</span>
+            <span style={{ display: 'inline-block', lineHeight: 1 }}>[ BEGIN_SESSION ]</span>
           </button>
 
-          {/* Footer Text Strip within Module C bottom margin */}
+          {/* Localized Footer directly underneath the Begin Session slab */}
           <div style={{
             marginTop: 16,
             paddingTop: 12,
             borderTop: '1px solid rgba(197,160,89,0.3)',
             display: 'flex',
             justifyContent: 'space-between',
+            alignItems: 'center',
             fontSize: 10,
             letterSpacing: '0.2em',
             color: isBeginHovered ? '#C5A059' : txt,
             opacity: isBeginHovered ? 1 : 0.6,
-            transition: 'color 0.25s ease, opacity 0.25s ease',
+            transition: 'color 0.25s ease, opacity 0.25s ease, text-shadow 0.25s ease',
             textShadow: isBeginHovered ? '0 0 10px rgba(197,160,89,0.65)' : 'none',
             userSelect: 'none',
           }}>
@@ -366,52 +421,21 @@ export const BentoHub: React.FC<BentoHubProps> = ({
           </div>
         </Module>
 
-        {/* ─── MODULE D: PROTOCOL ─── col-span-4, row 2 ────────────────────── */}
+        {/* ─── MODULE 5: MODES ─── col-span-4, row 2 (420px) ──────────────────────── */}
         <Module
           theme={theme}
           className="bottom-row-module"
-          style={{ gridColumn: 'span 4', gridRow: 2, height: 400, display: 'flex', flexDirection: 'column' }}
-          noHover
-        >
-          <ModuleTag>[ 00_PROTOCOL ]</ModuleTag>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 14, flex: 1 }}>
-            {[
-              '01_LOCATE: ALIGN CURSOR TO NODE RADIUS',
-              '02_CALIBRATE: GILD CHARACTERS VIA INPUT',
-              '03_VELOCITY: MAINTAIN SYNERGY FOR KINETIC STREAK',
-            ].map((line) => (
-              <div
-                key={line}
-                style={{
-                  fontSize: 10,
-                  lineHeight: 1.6,
-                  color: txt,
-                  letterSpacing: '0.12em',
-                  fontFamily: "'JetBrains Mono', monospace",
-                  opacity: 0.85,
-                  borderLeft: '1px solid rgba(197,160,89,0.5)',
-                  paddingLeft: 10,
-                }}
-              >
-                {line}
-              </div>
-            ))}
-          </div>
-          {/* Status strip */}
-          <div style={{ marginTop: 'auto', paddingTop: 12, fontSize: 10, opacity: 0.4, color: txt, letterSpacing: '0.1em' }}>
-            STATUS: CALIBRATED — PRESS ENTER TO COMMENCE
-          </div>
-        </Module>
-
-        {/* ─── MODULE E: MODES ─── col-span-4, row 2 ─────────────────── */}
-        <Module
-          theme={theme}
-          className="bottom-row-module"
-          style={{ gridColumn: 'span 4', gridRow: 2, height: 400, display: 'flex', flexDirection: 'column' }}
+          style={{
+            gridColumn: 'span 4',
+            height: 420,
+            display: 'flex',
+            flexDirection: 'column',
+            justifyContent: 'flex-start',
+          }}
         >
           <ModuleTag>[ MODE_CALIBRATION ]</ModuleTag>
 
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 10, flex: 1 }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
             {(['Chrono', 'Overdrive', 'Zen'] as GameMode[]).map((mode) => (
               <motion.button
                 key={mode}
@@ -442,9 +466,9 @@ export const BentoHub: React.FC<BentoHubProps> = ({
             ))}
           </div>
 
-          {/* Mode description */}
+          {/* Mode description top-aligned underneath modes */}
           <div style={{
-            marginTop: 'auto',
+            marginTop: 16,
             padding: '12px 14px',
             border: '1px solid rgba(197,160,89,0.3)',
             fontSize: 10,

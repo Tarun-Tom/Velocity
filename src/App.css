@@ -167,16 +167,22 @@ body.light-theme .corner-bracket {
 
 /* Force shared height for the bottom row */
 .bottom-row-module {
-  height: 400px;
+  height: 420px;
   display: flex;
   flex-direction: column;
 }
 
-/* The Radiant Bloom for the Start Slab */
+/* The Radiant Bloom for the Start Slab (Multi-layered gold box-shadow glowing onto the grid) */
+.begin-session-slab {
+  transition: box-shadow 0.4s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
 .begin-session-slab:hover {
-  box-shadow: 0 0 20px rgba(197, 160, 89, 0.4), 
-              0 0 60px rgba(197, 160, 89, 0.2) !important;
-  transform: translateY(-2px);
+  box-shadow:
+    0 0 15px rgba(197, 160, 89, 0.45),
+    0 0 35px rgba(197, 160, 89, 0.30),
+    0 0 70px rgba(197, 160, 89, 0.20),
+    0 0 110px rgba(197, 160, 89, 0.10) !important;
 }
 
 .begin-session-btn {
@@ -196,11 +202,13 @@ body.light-theme .corner-bracket {
 }
 
 .begin-session-btn:hover {
-  background: #D4AF37 !important;   /* Brightens subtly on hover */
+  background: #C5A059 !important;   /* Button stays solid Gold (#C5A059) */
   border-color: #C5A059 !important;
   color: #000000 !important;       /* Pitch Black text stays sharp */
-  box-shadow: 0 0 20px rgba(197, 160, 89, 0.4), 
-              0 0 60px rgba(197, 160, 89, 0.2) !important;
+  box-shadow:
+    0 0 20px rgba(197, 160, 89, 0.55),
+    0 0 45px rgba(197, 160, 89, 0.35),
+    0 0 80px rgba(197, 160, 89, 0.22) !important;
 }
 
 @keyframes goldBorderPulse {

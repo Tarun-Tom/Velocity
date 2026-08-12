@@ -34,18 +34,20 @@ export const CinematicAtmosphere: React.FC<CinematicAtmosphereProps> = ({ theme 
         </svg>
       </div>
 
-      {/* Digital Fog Noise Texture Depth Overlay */}
+      {/* Liquid-Motion Background Blur & Ambient Fluid Glow Overlay */}
       <div
-        className="digital-fog-overlay"
+        className="liquid-motion-atmosphere"
         style={{
           position: 'fixed',
           inset: 0,
           pointerEvents: 'none',
           zIndex: 0,
+          backdropFilter: 'blur(24px)',
+          WebkitBackdropFilter: 'blur(24px)',
           background:
             theme === 'dark'
-              ? 'radial-gradient(circle at 50% 50%, rgba(197, 160, 89, 0.03) 0%, rgba(0, 0, 0, 0) 70%), radial-gradient(circle at 80% 20%, rgba(255, 255, 255, 0.015) 0%, rgba(0, 0, 0, 0) 50%)'
-              : 'radial-gradient(circle at 50% 50%, rgba(197, 160, 89, 0.04) 0%, rgba(253, 253, 251, 0) 70%), radial-gradient(circle at 20% 80%, rgba(0, 0, 0, 0.02) 0%, rgba(253, 253, 251, 0) 50%)',
+              ? 'radial-gradient(ellipse at 30% 20%, rgba(197, 160, 89, 0.05) 0%, transparent 60%), radial-gradient(ellipse at 70% 80%, rgba(197, 160, 89, 0.03) 0%, transparent 65%)'
+              : 'radial-gradient(ellipse at 30% 20%, rgba(197, 160, 89, 0.06) 0%, transparent 60%), radial-gradient(ellipse at 70% 80%, rgba(51, 51, 51, 0.03) 0%, transparent 65%)',
         }}
       />
     </>

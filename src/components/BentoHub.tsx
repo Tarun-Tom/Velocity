@@ -2,8 +2,9 @@ import React from 'react';
 import { motion } from 'framer-motion';
 import { VariableTitle } from './VariableTitle';
 import { VelocityButton } from './VelocityButton';
-import { Volume2, VolumeX, Moon, Sun, BarChart2, Play } from 'lucide-react';
+import { Volume2, VolumeX, Moon } from 'lucide-react';
 
+// ── Types ──────────────────────────────────────────────────────────────────────
 export type GameMode = 'Chrono' | 'Overdrive' | 'Zen';
 
 interface LeaderboardEntry {
@@ -29,6 +30,72 @@ interface BentoHubProps {
   onBeginSession: () => void;
 }
 
+// ── Telemetry Corner Markers ───────────────────────────────────────────────────
+// Tiny 1px monospace '+' signs at the four interior corners of each Bento module.
+// Renders the blueprint/telemetry screen aesthetic without any visual noise.
+export const TelemetryCorners = () => (
+  <>
+    <span aria-hidden="true" style={{ position: 'absolute', top: 5, left: 7,   fontSize: 10, lineHeight: 1, color: '#C5A059', opacity: 0.45, pointerEvents: 'none', fontFamily: 'monospace', userSelect: 'none' }}>+</span>
+    <span aria-hidden="true" style={{ position: 'absolute', top: 5, right: 7,  fontSize: 10, lineHeight: 1, color: '#C5A059', opacity: 0.45, pointerEvents: 'none', fontFamily: 'monospace', userSelect: 'none' }}>+</span>
+    <span aria-hidden="true" style={{ position: 'absolute', bottom: 5, left: 7,  fontSize: 10, lineHeight: 1, color: '#C5A059', opacity: 0.45, pointerEvents: 'none', fontFamily: 'monospace', userSelect: 'none' }}>+</span>
+    <span aria-hidden="true" style={{ position: 'absolute', bottom: 5, right: 7, fontSize: 10, lineHeight: 1, color: '#C5A059', opacity: 0.45, pointerEvents: 'none', fontFamily: 'monospace', userSelect: 'none' }}>+</span>
+  </>
+);
+
+// ── Module wrapper ─────────────────────────────────────────────────────────────
+// Thin wrapper that enforces the common bento token set: 1px Gold border,
+// 0px radius, correct background per theme, relative positioning for corners.
+const Module: React.FC<{
+  span?: number;
+  rowSpan?: number;
+  style?: React.CSSProperties;
+  className?: string;
+  children: React.ReactNode;
+  theme: 'light' | 'dark';
+  noHover?: boolean;
+}> = ({ span, style, className = '', children, theme, noHover }) => (
+  <div
+    className={`bento-module ${className} ${noHover ? 'no-hover' : ''}`}
+    style={{
+      gridColumn: span ? `span ${span}` : undefined,
+      position: 'relative',
+      border: '1px solid #C5A059',
+      borderRadius: 0,
+      padding: '24px 28px',
+      background: theme === 'dark' ? 'rgba(0,0,0,0.92)' : 'rgba(253,253,251,0.92)',
+      boxSizing: 'border-box',
+      ...style,
+    }}
+  >
+    <TelemetryCorners />
+    {children}
+  </div>
+);
+
+// ── Module header label ───────────────────────────────────────────────────────
+const ModuleTag: React.FC<{ children: React.ReactNode }> = ({ children }) => (
+  <div
+    style={{
+      fontSize: 10,
+      letterSpacing: '0.22em',
+      color: '#C5A059',
+      textTransform: 'uppercase',
+      fontFamily: "'JetBrains Mono', monospace",
+      marginBottom: 14,
+      opacity: 0.85,
+    }}
+  >
+    {children}
+  </div>
+);
+
+// ── Neutral text color ─────────────────────────────────────────────────────────
+const neutral = (theme: 'light' | 'dark') =>
+  theme === 'light' ? '#333333' : '#FDFDFB';
+
+// ══════════════════════════════════════════════════════════════════════════════
+// BentoHub
+// ══════════════════════════════════════════════════════════════════════════════
 export const BentoHub: React.FC<BentoHubProps> = ({
   theme,
   setTheme,
@@ -43,15 +110,24 @@ export const BentoHub: React.FC<BentoHubProps> = ({
   mousePos,
   onBeginSession,
 }) => {
+  const [isBeginHovered, setIsBeginHovered] = React.useState(false);
+
+  const txt = neutral(theme);
   const springConfig = { type: 'spring' as const, stiffness: 220, damping: 22 };
+
+  // Mode description copy
+  const modeDesc: Record<GameMode, string> = {
+    Chrono:    '60s fixed. Maximize WPM & accuracy.',
+    Overdrive: '15s initial. +3s per word, +5s per streak.',
+    Zen:       'Endless flow. No timer. No penalties.',
+  };
 
   return (
     <motion.div
-      initial={{ opacity: 0, y: 15 }}
+      initial={{ opacity: 0, y: 12 }}
       animate={{ opacity: 1, y: 0 }}
-      exit={{ opacity: 0, y: -15 }}
+      exit={{ opacity: 0, y: -12 }}
       transition={springConfig}
-      className="bento-hub-overlay"
       style={{
         position: 'fixed',
         inset: 0,
@@ -59,333 +135,330 @@ export const BentoHub: React.FC<BentoHubProps> = ({
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        padding: '32px',
+        padding: '40px',
         boxSizing: 'border-box',
         pointerEvents: 'auto',
+        fontFamily: "'JetBrains Mono', monospace",
       }}
     >
+      {/*
+        12-COLUMN STRUCTURAL GRID LOCK
+        ─────────────────────────────────────────────
+        Row 1 (h-[300px]):
+          [Module A: Title]         -> col-span-8
+          [Module B: Records]       -> col-span-4
+        Row 2 (h-[400px]):
+          [Module C: Begin Session] -> col-span-4
+          [Module D: Protocol]      -> col-span-4
+          [Module E: Modes]         -> col-span-4
+        ─────────────────────────────────────────────
+        Gap: 16px (gap-4). Fixed max-w-7xl (1280px).
+      */}
       <div
-        className="bento-hub-grid"
+        className="bento-container"
         style={{
           width: '100%',
-          maxWidth: '1180px',
+          maxWidth: 1280,
           display: 'grid',
           gridTemplateColumns: 'repeat(12, 1fr)',
-          gap: '16px',
-          fontFamily: "'JetBrains Mono', monospace",
+          gridTemplateRows: 'auto auto',
+          gap: '1rem',
+          alignItems: 'stretch',
         }}
       >
-        {/* MODULE 1: MAIN TITLE & BRAND IDENTITY (Top-Left Priority, Col-span 7) */}
-        <div
-          className="bento-module title-module"
-          style={{
-            gridColumn: 'span 7',
-            border: '1px solid var(--border-idle)',
-            borderRadius: '0px',
-            padding: '28px',
-            display: 'flex',
-            flexDirection: 'column',
-            justifyContent: 'space-between',
-            background: theme === 'dark' ? 'rgba(0, 0, 0, 0.88)' : 'rgba(253, 253, 251, 0.88)',
-            position: 'relative',
-          }}
+
+        {/* ─── MODULE A: TITLE ─── col-span-8, row 1 ──────────────────────────────── */}
+        <Module
+          theme={theme}
+          style={{ gridColumn: 'span 8', gridRow: 1, height: 300, display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}
         >
           <div>
-            <div
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                marginBottom: '12px',
-              }}
-            >
-              <span style={{ fontSize: '10px', letterSpacing: '0.25em', color: '#C5A059' }}>
+            {/* Top meta row */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+              <span style={{ fontSize: 10, letterSpacing: '0.28em', color: '#C5A059' }}>
                 [ SPATIAL_TYPING_ENGINE ]
               </span>
-              <span style={{ fontSize: '10px', letterSpacing: '0.15em', color: theme === 'light' ? '#333333' : '#FDFDFB', opacity: 0.65 }}>
-                VECTOR_01 // 60s_STABILIZED
+              <span style={{ fontSize: 10, letterSpacing: '0.15em', color: txt, opacity: 0.55 }}>
+                VECTOR_01 // STABILIZED
               </span>
             </div>
 
-            {/* Variable Title: Proximity responsive typography (Gold #C5A059) */}
+            {/* Variable-weight title */}
             <VariableTitle mousePos={mousePos} />
 
-            <div
-              style={{
-                fontFamily: "'Cormorant Garamond', serif",
-                fontStyle: 'italic',
-                fontSize: '16px',
-                opacity: 0.9,
-                color: '#C5A059',
-                marginTop: '8px',
-                letterSpacing: '0.02em',
-              }}
-            >
+            {/* Italic tagline */}
+            <div style={{
+              fontFamily: "'Cormorant Garamond', serif",
+              fontStyle: 'italic',
+              fontSize: 15,
+              color: '#C5A059',
+              marginTop: 8,
+              opacity: 0.85,
+              letterSpacing: '0.02em',
+            }}>
               Spatial precision. Kinetic intent.
             </div>
           </div>
 
-          {/* Global Config Toolbar */}
-          <div
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              marginTop: '24px',
-              paddingTop: '16px',
-              borderTop: '1px solid #C5A059',
-            }}
-          >
-            <div style={{ display: 'flex', gap: '12px' }}>
-              <VelocityButton
-                onClick={() => setMuted(!muted)}
-                ariaLabel={muted ? 'Unmute audio' : 'Mute audio'}
-              >
-                {muted ? <VolumeX size={14} /> : <Volume2 size={14} />}
-                <span>{muted ? 'MUTED' : 'AUDIO_ON'}</span>
-              </VelocityButton>
+          {/* Config toolbar */}
+          <div style={{
+            display: 'flex',
+            gap: 10,
+            marginTop: 'auto',
+            paddingTop: 16,
+            borderTop: '1px solid rgba(197,160,89,0.35)',
+          }}>
+            <VelocityButton
+              onClick={() => setMuted(!muted)}
+              ariaLabel={muted ? 'Unmute audio' : 'Mute audio'}
+            >
+              {muted ? <VolumeX size={12} /> : <Volume2 size={12} />}
+              <span>{muted ? 'MUTED' : 'AUDIO_ON'}</span>
+            </VelocityButton>
 
-              <VelocityButton
-                onClick={() => setTheme(theme === 'light' ? 'dark' : 'light')}
-                ariaLabel="Toggle color theme"
-              >
-                {theme === 'light' ? <Moon size={14} /> : <Sun size={14} />}
-                <span>{theme.toUpperCase()}</span>
-              </VelocityButton>
-            </div>
+            <VelocityButton
+              onClick={() => setTheme(theme === 'light' ? 'dark' : 'light')}
+              ariaLabel="Toggle color theme"
+            >
+              <Moon size={12} />
+              <span>{theme.toUpperCase()}_MODE</span>
+            </VelocityButton>
 
             <VelocityButton
               className={showLeaderboard ? 'active' : ''}
               onClick={() => setShowLeaderboard(!showLeaderboard)}
               ariaLabel="Toggle leaderboard"
+              style={{ marginLeft: 'auto' }}
             >
-              <BarChart2 size={14} />
-              <span>[ LEADERBOARD ]</span>
+              <span>[ ARCHIVE ]</span>
             </VelocityButton>
           </div>
-        </div>
+        </Module>
 
-        {/* MODULE 2: SYSTEM ARCHIVE & TELEMETRY (Top-Right, Col-span 5) */}
-        <div
-          className="bento-module archive-module"
-          style={{
-            gridColumn: 'span 5',
-            border: '1px solid #C5A059',
-            borderRadius: '0px',
-            padding: '24px',
-            display: 'flex',
-            flexDirection: 'column',
-            justifyContent: 'space-between',
-            background: theme === 'dark' ? 'rgba(0, 0, 0, 0.88)' : 'rgba(253, 253, 251, 0.88)',
-          }}
+        {/* ─── MODULE B: RECORD_ARCHIVE ─── col-span-4, row 1 ────────────────────── */}
+        <Module
+          theme={theme}
+          style={{ gridColumn: 'span 4', gridRow: 1, height: 300, display: 'flex', flexDirection: 'column' }}
         >
-          <div>
-            <div style={{ fontSize: '10px', letterSpacing: '0.2em', marginBottom: '14px', color: '#C5A059' }}>
-              [ ARCHIVE_TELEMETRY ]
-            </div>
+          <ModuleTag>[ RECORD_ARCHIVE ]</ModuleTag>
 
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-              <div
-                style={{
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  padding: '10px 14px',
-                  border: '1px solid #C5A059',
-                  fontSize: '11px',
-                }}
-              >
-                <span style={{ opacity: 0.6, color: theme === 'light' ? '#333333' : '#FDFDFB' }}>PB CHRONO:</span>
-                <span style={{ fontWeight: 700, color: '#C5A059' }}>{scores.Chrono || 0} PTS</span>
-              </div>
-
-              <div
-                style={{
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  padding: '10px 14px',
-                  border: '1px solid #C5A059',
-                  fontSize: '11px',
-                }}
-              >
-                <span style={{ opacity: 0.6, color: theme === 'light' ? '#333333' : '#FDFDFB' }}>PB OVERDRIVE:</span>
-                <span style={{ fontWeight: 700, color: '#C5A059' }}>{scores.Overdrive || 0} PTS</span>
-              </div>
-            </div>
-          </div>
-
-          <div
-            style={{
-              fontSize: '10px',
-              opacity: 0.45,
-              color: theme === 'light' ? '#333333' : '#FDFDFB',
-              letterSpacing: '0.1em',
-              lineHeight: 1.5,
-              marginTop: '16px',
-            }}
-          >
-            MOTOR_MEMORY: ACTIVE <br />
-            PROXIMITY_LOCK: 180PX RADIUS <br />
-            SPRING_PHYSICS: HIGH_TENSION
-          </div>
-        </div>
-
-        {/* MODULE 3: PRIMARY ACTIONHUB (Bottom-Left Priority, Col-span 7) */}
-        <div
-          className="bento-module action-module"
-          style={{
-            gridColumn: 'span 7',
-            border: '1px solid #C5A059',
-            borderRadius: '0px',
-            padding: '28px',
-            display: 'flex',
-            flexDirection: 'column',
-            justifyContent: 'space-between',
-            background: theme === 'dark' ? 'rgba(0, 0, 0, 0.88)' : 'rgba(253, 253, 251, 0.88)',
-          }}
-        >
           {showLeaderboard ? (
-            <div>
-              <div style={{ fontSize: '11px', letterSpacing: '0.2em', marginBottom: '12px', color: '#C5A059' }}>
-                [ GLOBAL_LEADERBOARD ]
-              </div>
-              <table style={{ width: '100%', fontSize: '11px', borderCollapse: 'collapse', color: theme === 'light' ? '#333333' : '#FDFDFB' }}>
-                <thead>
-                  <tr style={{ borderBottom: '1px solid #C5A059', opacity: 0.55 }}>
-                    <th style={{ textAlign: 'left', padding: '6px 0', color: '#C5A059' }}>MODE</th>
-                    <th style={{ textAlign: 'left', padding: '6px 0', color: '#C5A059' }}>SCORE</th>
-                    <th style={{ textAlign: 'left', padding: '6px 0', color: '#C5A059' }}>WPM</th>
-                    <th style={{ textAlign: 'left', padding: '6px 0', color: '#C5A059' }}>ACC</th>
+            <table style={{ width: '100%', fontSize: 11, borderCollapse: 'collapse', color: txt, flex: 1 }}>
+              <thead>
+                <tr style={{ borderBottom: '1px solid #C5A059' }}>
+                  <th style={{ textAlign: 'left', padding: '5px 0', color: '#C5A059', fontWeight: 600 }}>MODE</th>
+                  <th style={{ textAlign: 'left', padding: '5px 0', color: '#C5A059', fontWeight: 600 }}>SCORE</th>
+                  <th style={{ textAlign: 'left', padding: '5px 0', color: '#C5A059', fontWeight: 600 }}>WPM</th>
+                  <th style={{ textAlign: 'left', padding: '5px 0', color: '#C5A059', fontWeight: 600 }}>ACC</th>
+                </tr>
+              </thead>
+              <tbody>
+                {getLeaderboardData().length === 0 ? (
+                  <tr>
+                    <td colSpan={4} style={{ padding: '14px 0', opacity: 0.4, fontSize: 10 }}>
+                      NO SESSION RECORDS
+                    </td>
                   </tr>
-                </thead>
-                <tbody>
-                  {getLeaderboardData().length === 0 ? (
-                    <tr>
-                      <td colSpan={4} style={{ padding: '12px 0', opacity: 0.4 }}>
-                        No session records captured
-                      </td>
+                ) : (
+                  getLeaderboardData().slice(0, 5).map((entry, idx) => (
+                    <tr key={idx} style={{ borderBottom: '1px solid rgba(197,160,89,0.2)' }}>
+                      <td style={{ padding: '7px 0', color: '#C5A059' }}>{entry.mode.toUpperCase()}</td>
+                      <td style={{ color: txt, fontWeight: 600 }}>{entry.score}</td>
+                      <td style={{ color: txt }}>{entry.wpm}</td>
+                      <td style={{ color: txt }}>{entry.accuracy}%</td>
                     </tr>
-                  ) : (
-                    getLeaderboardData().slice(0, 4).map((entry, idx) => (
-                      <tr key={idx} style={{ borderBottom: '1px dashed #C5A059' }}>
-                        <td style={{ padding: '8px 0', color: '#C5A059' }}>{entry.mode}</td>
-                        <td style={{ color: '#C5A059', fontWeight: 600 }}>{entry.score}</td>
-                        <td style={{ color: '#C5A059' }}>{entry.wpm}</td>
-                        <td style={{ color: '#C5A059' }}>{entry.accuracy}%</td>
-                      </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
-            </div>
+                  ))
+                )}
+              </tbody>
+            </table>
           ) : (
-            <div>
-              <div style={{ fontSize: '10px', letterSpacing: '0.2em', marginBottom: '12px', color: '#C5A059' }}>
-                [ SESSION_INITIALIZATION ]
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10, flex: 1 }}>
+              {(['Chrono', 'Overdrive', 'Zen'] as GameMode[]).map((mode) => (
+                <div
+                  key={mode}
+                  style={{
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    padding: '9px 14px',
+                    border: '1px solid rgba(197,160,89,0.4)',
+                    fontSize: 11,
+                  }}
+                >
+                  <span style={{ color: '#C5A059', opacity: 0.7 }}>PB {mode.toUpperCase()}:</span>
+                  <span style={{ fontWeight: 700, color: '#C5A059' }}>
+                    {scores[mode] || 0} PTS
+                  </span>
+                </div>
+              ))}
+              <div style={{ marginTop: 'auto', fontSize: 10, opacity: 0.4, color: txt, lineHeight: 1.6 }}>
+                MOTOR_MEMORY: ACTIVE<br />
+                PROXIMITY_LOCK: 240PX RADIUS
               </div>
-              <div style={{ fontSize: '12px', opacity: 0.85, color: '#C5A059', lineHeight: 1.6, marginBottom: '20px' }}>
-                Hover cursor within word focus zones to target. Type keystrokes with kinetic flow.
-              </div>
-
-              {/* Primary Action Button — Strictly Gold (#C5A059) */}
-              <VelocityButton
-                onClick={onBeginSession}
-                className="begin-session-btn"
-                style={{
-                  width: '100%',
-                  padding: '1.25rem',
-                  fontSize: '15px',
-                  letterSpacing: '0.2em',
-                  fontWeight: 700,
-                  justifyContent: 'center',
-                }}
-              >
-                <Play size={16} fill="currentColor" />
-                [ BEGIN_SESSION ]
-              </VelocityButton>
             </div>
           )}
+        </Module>
 
-          <div
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              fontSize: '10px',
-              opacity: 0.45,
-              color: theme === 'light' ? '#333333' : '#FDFDFB',
-              letterSpacing: '0.1em',
-              marginTop: '16px',
-            }}
-          >
-            <span>STATUS: CALIBRATED</span>
-            <span>PRESS ENTER OR CLICK TO COMMENCE</span>
-          </div>
-        </div>
-
-        {/* MODULE 4: MODE CALIBRATION (Center-Right Priority, Col-span 5) — Gold (#C5A059) */}
-        <div
-          className="bento-module mode-module"
+        {/* ─── MODULE C: BEGIN_SESSION ─── col-span-4, row 2 ────────────────────── */}
+        <Module
+          theme={theme}
+          className="begin-session-slab bottom-row-module"
           style={{
-            gridColumn: 'span 5',
-            border: '1px solid #C5A059',
-            borderRadius: '0px',
-            padding: '24px',
+            gridColumn: 'span 4',
+            gridRow: 2,
+            height: 400,
             display: 'flex',
             flexDirection: 'column',
             justifyContent: 'space-between',
-            background: theme === 'dark' ? 'rgba(0, 0, 0, 0.88)' : 'rgba(253, 253, 251, 0.88)',
           }}
+          noHover
         >
-          <div>
-            <div style={{ fontSize: '10px', letterSpacing: '0.2em', marginBottom: '14px', color: '#C5A059' }}>
-              [ MODE_CALIBRATION ]
-            </div>
-
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-              {/* Mode Selectors — Bone White (#FDFDFB) */}
-              <VelocityButton
-                className={gameMode === 'Chrono' ? 'active' : ''}
-                onClick={() => setGameMode('Chrono')}
-                style={{ width: '100%', justifyContent: 'flex-start' }}
-              >
-                CHRONO (60S)
-              </VelocityButton>
-
-              <VelocityButton
-                className={gameMode === 'Overdrive' ? 'active' : ''}
-                onClick={() => setGameMode('Overdrive')}
-                style={{ width: '100%', justifyContent: 'flex-start' }}
-              >
-                OVERDRIVE (+TIME)
-              </VelocityButton>
-
-              <VelocityButton
-                className={gameMode === 'Zen' ? 'active' : ''}
-                onClick={() => setGameMode('Zen')}
-                style={{ width: '100%', justifyContent: 'flex-start' }}
-              >
-                ZEN (ENDLESS)
-              </VelocityButton>
-            </div>
-          </div>
-
-          <div
+          {/* Main Solid Gold Slab Button */}
+          <button
+            onClick={onBeginSession}
+            onMouseEnter={() => setIsBeginHovered(true)}
+            onMouseLeave={() => setIsBeginHovered(false)}
+            className="begin-session-btn"
             style={{
-              marginTop: '16px',
-              padding: '12px',
+              flex: 1,
+              width: '100%',
+              fontSize: 14,
+              letterSpacing: '0.2em',
+              fontWeight: 800,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              flexDirection: 'column',
+              gap: 12,
+              cursor: 'pointer',
               border: '1px solid #C5A059',
-              fontSize: '11px',
-              lineHeight: 1.5,
-              opacity: 0.75,
-              color: theme === 'light' ? '#333333' : '#FDFDFB',
+              background: '#C5A059',
+              color: '#000000',
+              boxSizing: 'border-box',
+              outline: 'none',
+              fontFamily: "'JetBrains Mono', monospace",
             }}
           >
-            {gameMode === 'Chrono' && 'Fixed 60-second speed run. Maximize WPM & score accuracy.'}
-            {gameMode === 'Overdrive' && '15s initial clock. +3s per word, +5s per synergy streak.'}
-            {gameMode === 'Zen' && 'Pure motor-memory flow. No timer, no penalties, endless flow.'}
+            <span style={{ fontSize: 26, fontWeight: 800, letterSpacing: '0.15em' }}>▶</span>
+            [ BEGIN_SESSION ]
+          </button>
+
+          {/* Footer Text Strip within Module C bottom margin */}
+          <div style={{
+            marginTop: 16,
+            paddingTop: 12,
+            borderTop: '1px solid rgba(197,160,89,0.3)',
+            display: 'flex',
+            justifyContent: 'space-between',
+            fontSize: 10,
+            letterSpacing: '0.2em',
+            color: isBeginHovered ? '#C5A059' : txt,
+            opacity: isBeginHovered ? 1 : 0.6,
+            transition: 'color 0.25s ease, opacity 0.25s ease',
+            textShadow: isBeginHovered ? '0 0 10px rgba(197,160,89,0.65)' : 'none',
+            userSelect: 'none',
+          }}>
+            <span>01_AIM</span>
+            <span style={{ opacity: 0.4 }}>//</span>
+            <span>02_TYPE</span>
+            <span style={{ opacity: 0.4 }}>//</span>
+            <span>03_FLOW</span>
           </div>
-        </div>
+        </Module>
+
+        {/* ─── MODULE D: PROTOCOL ─── col-span-4, row 2 ────────────────────── */}
+        <Module
+          theme={theme}
+          className="bottom-row-module"
+          style={{ gridColumn: 'span 4', gridRow: 2, height: 400, display: 'flex', flexDirection: 'column' }}
+          noHover
+        >
+          <ModuleTag>[ 00_PROTOCOL ]</ModuleTag>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 14, flex: 1 }}>
+            {[
+              '01_LOCATE: ALIGN CURSOR TO NODE RADIUS',
+              '02_CALIBRATE: GILD CHARACTERS VIA INPUT',
+              '03_VELOCITY: MAINTAIN SYNERGY FOR KINETIC STREAK',
+            ].map((line) => (
+              <div
+                key={line}
+                style={{
+                  fontSize: 10,
+                  lineHeight: 1.6,
+                  color: txt,
+                  letterSpacing: '0.12em',
+                  fontFamily: "'JetBrains Mono', monospace",
+                  opacity: 0.85,
+                  borderLeft: '1px solid rgba(197,160,89,0.5)',
+                  paddingLeft: 10,
+                }}
+              >
+                {line}
+              </div>
+            ))}
+          </div>
+          {/* Status strip */}
+          <div style={{ marginTop: 'auto', paddingTop: 12, fontSize: 10, opacity: 0.4, color: txt, letterSpacing: '0.1em' }}>
+            STATUS: CALIBRATED — PRESS ENTER TO COMMENCE
+          </div>
+        </Module>
+
+        {/* ─── MODULE E: MODES ─── col-span-4, row 2 ─────────────────── */}
+        <Module
+          theme={theme}
+          className="bottom-row-module"
+          style={{ gridColumn: 'span 4', gridRow: 2, height: 400, display: 'flex', flexDirection: 'column' }}
+        >
+          <ModuleTag>[ MODE_CALIBRATION ]</ModuleTag>
+
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10, flex: 1 }}>
+            {(['Chrono', 'Overdrive', 'Zen'] as GameMode[]).map((mode) => (
+              <motion.button
+                key={mode}
+                onClick={() => setGameMode(mode)}
+                whileTap={{ scale: 0.98 }}
+                style={{
+                  border: `1px solid ${gameMode === mode ? '#C5A059' : 'rgba(197,160,89,0.35)'}`,
+                  borderRadius: 0,
+                  background: gameMode === mode ? 'rgba(197,160,89,0.12)' : 'transparent',
+                  padding: '14px 18px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  cursor: 'pointer',
+                  fontFamily: "'JetBrains Mono', monospace",
+                  fontSize: 11,
+                  letterSpacing: '0.12em',
+                  textTransform: 'uppercase',
+                  color: gameMode === mode ? '#C5A059' : txt,
+                  transition: 'all 0.18s ease',
+                }}
+              >
+                <span style={{ fontWeight: gameMode === mode ? 700 : 400 }}>{mode}</span>
+                <span style={{ opacity: 0.5, fontSize: 10 }}>
+                  {mode === 'Chrono' ? '60S' : mode === 'Overdrive' ? '+TIME' : '∞'}
+                </span>
+              </motion.button>
+            ))}
+          </div>
+
+          {/* Mode description */}
+          <div style={{
+            marginTop: 'auto',
+            padding: '12px 14px',
+            border: '1px solid rgba(197,160,89,0.3)',
+            fontSize: 10,
+            lineHeight: 1.6,
+            color: txt,
+            opacity: 0.7,
+            letterSpacing: '0.08em',
+          }}>
+            {modeDesc[gameMode]}
+          </div>
+        </Module>
+
       </div>
     </motion.div>
   );
 };
+

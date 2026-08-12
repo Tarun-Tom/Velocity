@@ -149,18 +149,73 @@ body.light-theme .corner-bracket {
   background: rgba(197, 160, 89, 0.16);
 }
 
+/* ── Primary Action: Flat Gold Slab ─────────────────────────────────────────
+   The .begin-session-btn is a solid #C5A059 surface with Pitch Black text.
+   The outer bloom glow is rendered in JS (BentoHub.tsx) via framer-motion.
+   The satin sheen is rendered in VelocityButton.tsx via a radial-gradient overlay.
+   CSS handles: the base slab colour, the hover border highlight, and the
+   subtle box-shadow bloom that reinforces the JS bloom behind it.
+   ───────────────────────────────────────────────────────────────────────── */
+/* ── Structural Grid Lock ────────────────────────────────────────────────── */
+.bento-container {
+  display: grid;
+  grid-template-columns: repeat(12, 1fr);
+  grid-template-rows: auto auto; /* Two distinct rows */
+  gap: 1rem;
+  align-items: stretch; /* Forces equal height in rows */
+}
+
+/* Force shared height for the bottom row */
+.bottom-row-module {
+  height: 400px;
+  display: flex;
+  flex-direction: column;
+}
+
+/* The Radiant Bloom for the Start Slab */
+.begin-session-slab:hover {
+  box-shadow: 0 0 20px rgba(197, 160, 89, 0.4), 
+              0 0 60px rgba(197, 160, 89, 0.2) !important;
+  transform: translateY(-2px);
+}
+
 .begin-session-btn {
   font-size: 13px !important;
-  font-weight: 700;
+  font-weight: 800 !important;
   border: 1px solid #C5A059 !important;
-  color: #C5A059 !important;
-  letter-spacing: 0.15em !important;
+  background: #C5A059 !important;  /* Flat Solid Gold Slab */
+  color: #000000 !important;       /* Pitch Black text */
+  border-radius: 0px !important;
+  letter-spacing: 0.18em !important;
+  box-shadow: none;
+  transition:
+    background-color 0.4s cubic-bezier(0.22, 1, 0.36, 1),
+    box-shadow 0.4s cubic-bezier(0.22, 1, 0.36, 1),
+    border-color 0.4s cubic-bezier(0.22, 1, 0.36, 1),
+    letter-spacing 0.22s ease-out !important;
 }
 
 .begin-session-btn:hover {
+  background: #D4AF37 !important;   /* Brightens subtly on hover */
   border-color: #C5A059 !important;
-  color: #C5A059 !important;
-  letter-spacing: 0.2em !important;
+  color: #000000 !important;       /* Pitch Black text stays sharp */
+  box-shadow: 0 0 20px rgba(197, 160, 89, 0.4), 
+              0 0 60px rgba(197, 160, 89, 0.2) !important;
+}
+
+@keyframes goldBorderPulse {
+  0% {
+    border-color: #C5A059;
+    box-shadow: 0 0 8px rgba(197, 160, 89, 0.4);
+  }
+  50% {
+    border-color: #FFF3B3;
+    box-shadow: 0 0 22px rgba(255, 243, 179, 0.85);
+  }
+  100% {
+    border-color: #C5A059;
+    box-shadow: 0 0 8px rgba(197, 160, 89, 0.4);
+  }
 }
 
 /* Telemetry & Accuracy Panel — Strictly 1px solid Gold border */
@@ -285,13 +340,40 @@ body.light-theme .stat-label {
   z-index: 1;
 }
 
-/* Bento Hub & Bento Box — Strictly 1px solid Gold border */
-.bento-module {
+/* Bento Hub & Bento Box — Strictly 1px solid Gold border with 10% Gold Flood on Hover */
+.bento-module,
+.bento-box {
+  position: relative;
   border: 1px solid #C5A059 !important;
-  transition: border-color 0.25s ease;
+  border-radius: 0px !important;
+  transition: background-color 0.25s ease, border-color 0.25s ease, box-shadow 0.25s ease;
 }
 
-.bento-box {
-  border: 1px solid #C5A059 !important;
-  transition: border-color 0.25s ease;
+.bento-module:hover,
+.bento-box:hover {
+  background-color: rgba(197, 160, 89, 0.10) !important; /* 10% Gold Flood per brief */
+  border-color: #C5A059 !important;
+  box-shadow: 0 0 18px rgba(197, 160, 89, 0.18);
+}
+
+/* [ 00_PROTOCOL ] Operational Protocol Clinical Mono hover flicker */
+.protocol-module .protocol-item {
+  color: var(--theme-color, #FDFDFB);
+  opacity: 0.70;
+  transition: opacity 0.2s ease, color 0.2s ease;
+}
+
+.protocol-module:hover .protocol-item {
+  color: #C5A059 !important;
+  opacity: 1 !important;
+  text-shadow: 0 0 10px rgba(197, 160, 89, 0.55);
+  animation: protocolFlicker 0.25s cubic-bezier(0.25, 1, 0.5, 1);
+}
+
+@keyframes protocolFlicker {
+  0% { opacity: 0.5; color: #FDFDFB; }
+  25% { opacity: 1; color: #C5A059; }
+  50% { opacity: 0.7; color: #FDFDFB; }
+  75% { opacity: 1; color: #FFF3B3; }
+  100% { opacity: 1; color: #C5A059; }
 }

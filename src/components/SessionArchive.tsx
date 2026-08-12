@@ -243,12 +243,12 @@ export const SessionArchive: React.FC<SessionArchiveProps> = ({
           <div style={{ fontSize: '10px', letterSpacing: '0.2em', marginBottom: '12px', color: '#C5A059' }}>
             [ PEAK_VELOCITY ]
           </div>
-          <div style={{ fontSize: '36px', fontWeight: 700, color: '#C5A059', lineHeight: 1 }}>
-            {peakWpm || wpm} <span style={{ fontSize: '12px', opacity: 0.65 }}>WPM</span>
+          <div style={{ fontSize: '36px', fontWeight: 700, color: theme === 'light' ? '#333333' : '#FDFDFB', lineHeight: 1 }}>
+            {peakWpm || wpm} <span style={{ fontSize: '12px', opacity: 0.65, color: '#C5A059' }}>WPM</span>
           </div>
           <div style={{ fontSize: '11px', marginTop: '12px', opacity: 0.75, color: theme === 'light' ? '#333333' : '#FDFDFB', display: 'flex', justifyContent: 'space-between' }}>
             <span>AVG WPM:</span>
-            <span style={{ fontWeight: 600 }}>{wpm}</span>
+            <span style={{ fontWeight: 600, color: '#C5A059' }}>{wpm}</span>
           </div>
         </div>
 
@@ -266,12 +266,12 @@ export const SessionArchive: React.FC<SessionArchiveProps> = ({
           <div style={{ fontSize: '10px', letterSpacing: '0.2em', marginBottom: '12px', color: '#C5A059' }}>
             [ PRECISION_INDEX ]
           </div>
-          <div style={{ fontSize: '36px', fontWeight: 700, color: '#C5A059', lineHeight: 1 }}>
+          <div style={{ fontSize: '36px', fontWeight: 700, color: theme === 'light' ? '#333333' : '#FDFDFB', lineHeight: 1 }}>
             {accuracy}%
           </div>
           <div style={{ fontSize: '11px', marginTop: '12px', opacity: 0.75, color: theme === 'light' ? '#333333' : '#FDFDFB', display: 'flex', justifyContent: 'space-between' }}>
             <span>KEYS:</span>
-            <span style={{ fontWeight: 600 }}>{correctKeys} / {correctKeys + incorrectKeys}</span>
+            <span style={{ fontWeight: 600, color: '#C5A059' }}>{correctKeys} / {correctKeys + incorrectKeys}</span>
           </div>
         </div>
 
@@ -289,12 +289,12 @@ export const SessionArchive: React.FC<SessionArchiveProps> = ({
           <div style={{ fontSize: '10px', letterSpacing: '0.2em', marginBottom: '12px', color: '#C5A059' }}>
             [ SYNERGY_FLOW ]
           </div>
-          <div style={{ fontSize: '36px', fontWeight: 700, color: '#C5A059', lineHeight: 1 }}>
-            x{flowStreak} <span style={{ fontSize: '12px', opacity: 0.65 }}>STREAK</span>
+          <div style={{ fontSize: '36px', fontWeight: 700, color: theme === 'light' ? '#333333' : '#FDFDFB', lineHeight: 1 }}>
+            x{flowStreak} <span style={{ fontSize: '12px', opacity: 0.65, color: '#C5A059' }}>STREAK</span>
           </div>
           <div style={{ fontSize: '11px', marginTop: '12px', opacity: 0.75, color: theme === 'light' ? '#333333' : '#FDFDFB', display: 'flex', justifyContent: 'space-between' }}>
             <span>SYNERGY BONUS:</span>
-            <span style={{ fontWeight: 600 }}>+{synergyPoints * 100} PTS</span>
+            <span style={{ fontWeight: 600, color: '#C5A059' }}>+{synergyPoints * 100} PTS</span>
           </div>
         </div>
 

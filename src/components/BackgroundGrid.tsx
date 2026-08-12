@@ -95,9 +95,9 @@ export const BackgroundGrid: React.FC<BackgroundGridProps> = ({
     window.addEventListener('resize', handleResize);
 
     const spacing = 24; // Baseline 24px architectural grid
-    const repulsionRadius = 180;
-    const maxRepulsion = 32;
-    const tetherRadius = 180;
+    const repulsionRadius = 240; // Expanded physical void clearing
+    const maxRepulsion = 64;     // Increased magnetic push for physical void float
+    const tetherRadius = 200;
 
     let smoothMouseX = mousePos.x;
     let smoothMouseY = mousePos.y;
@@ -187,7 +187,7 @@ export const BackgroundGrid: React.FC<BackgroundGridProps> = ({
       const parallaxX = smoothParallaxRef.current.x;
       const parallaxY = smoothParallaxRef.current.y;
 
-      // STEP 1: Scan grid dots & identify nearest 7 dots within 180px tether radius
+      // STEP 1: Scan grid dots & identify top 5 nearest dots within 180px tether radius
       const gridDots: {
         col: number;
         row: number;
@@ -211,14 +211,17 @@ export const BackgroundGrid: React.FC<BackgroundGridProps> = ({
       }
 
       gridDots.sort((a, b) => a.dist - b.dist);
-      const tetheredList = gridDots.slice(0, 7);
-      const tetheredKeySet = new Set(tetheredList.map((d) => `${d.col},${d.row}`));
+      // Top 5 nearest dots break away to orbit cursor with spring delay
+      const tetheredList = gridDots.slice(0, 5);
+      const tetherIndexMap = new Map<string, number>();
+      tetheredList.forEach((d, idx) => tetherIndexMap.set(`${d.col},${d.row}`, idx));
 
-      // STEP 2: Render dot grid with Unified Lerp physics (Anti-Snap return-to-home formula)
+      // STEP 2: Render dot grid with Unified Lerp physics & Orbiting Neural Tether
       for (let c = -2; c < cols; c++) {
         for (let r = -2; r < rows; r++) {
           const key = `${c},${r}`;
-          const isTethered = tetheredKeySet.has(key);
+          const tetherIdx = tetherIndexMap.get(key);
+          const isTethered = tetherIdx !== undefined;
 
           const origX = c * spacing + offsetX + (driftRef.current.x % spacing) + parallaxX;
           const origY = r * spacing + offsetY + (driftRef.current.y % spacing) + parallaxY;
@@ -232,12 +235,11 @@ export const BackgroundGrid: React.FC<BackgroundGridProps> = ({
           let isClose = false;
 
           if (isTethered && smoothMouseX !== -1000) {
-            // TETHERED DOT MECHANIC: Pulled inward from 180px boundary
-            const pullFactor = ((tetherRadius - dist) / tetherRadius) * 14;
-            if (dist > 0) {
-              targetX -= (dx / dist) * pullFactor;
-              targetY -= (dy / dist) * pullFactor;
-            }
+            // ORBITING NEURAL TETHER MECHANIC: 5 nearest dots break away & orbit cursor with spring delay
+            const orbitAngle = (tetherIdx / 5) * Math.PI * 2 + now * 0.0022;
+            const orbitRadius = 36 + tetherIdx * 7; // staggered orbital radiuses
+            targetX = smoothMouseX + Math.cos(orbitAngle) * orbitRadius;
+            targetY = smoothMouseY + Math.sin(orbitAngle) * orbitRadius;
           } else {
             // MAGNETIC REPULSION VOID: Synchronized 180px clearing with sharp perimeter compression
             if (dist < repulsionRadius) {
@@ -272,32 +274,32 @@ export const BackgroundGrid: React.FC<BackgroundGridProps> = ({
             });
           }
 
-          // Anti-Snap Physics: Unified Lerp (currentPosition += (homePosition/targetPosition - currentPosition) * 0.1)
+          // Anti-Snap Physics: Spring delay Lerp for tether dots, standard lerp for grid dots
           let dotState = dotStateMapRef.current.get(key);
+          const lerpRate = isTethered ? 0.08 : 0.12; // spring delay on breakaway dots
           if (!dotState) {
             dotState = { currentX: targetX, currentY: targetY };
             dotStateMapRef.current.set(key, dotState);
           } else {
-            dotState.currentX += (targetX - dotState.currentX) * 0.1;
-            dotState.currentY += (targetY - dotState.currentY) * 0.1;
+            dotState.currentX += (targetX - dotState.currentX) * lerpRate;
+            dotState.currentY += (targetY - dotState.currentY) * lerpRate;
           }
 
           const drawX = dotState.currentX;
           const drawY = dotState.currentY;
 
           if (isTethered && smoothMouseX !== -1000) {
-            // Draw 0.5px Gold hairline connection vector — very faint, non-cluttering
+            // Draw 0.5px Gold hairline connection vector from cursor to tether dot
             ctx.beginPath();
             ctx.moveTo(smoothMouseX, smoothMouseY);
             ctx.lineTo(drawX, drawY);
             ctx.lineWidth = 0.5;
-            ctx.strokeStyle =
-              currentTheme === 'dark' ? 'rgba(197, 160, 89, 0.10)' : 'rgba(197, 160, 89, 0.10)';
+            ctx.strokeStyle = 'rgba(197, 160, 89, 0.45)'; // 0.5px Gold hairline vector
             ctx.stroke();
 
-            // Render captured tether dot highlighted in Gold (full opacity — positional anchor)
+            // Render captured orbiting tether dot highlighted in Gold
             ctx.beginPath();
-            ctx.arc(drawX, drawY, 2.0, 0, Math.PI * 2);
+            ctx.arc(drawX, drawY, 2.2, 0, Math.PI * 2);
             ctx.fillStyle = tetherColor;
             ctx.fill();
 

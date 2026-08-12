@@ -17,8 +17,9 @@ interface WordNodeProps {
 }
 
 // ── Design tokens ──────────────────────────────────────────────────────────────
-const GOLD = '#C5A059'; // TYPED — archival success state
-const BONE = '#FDFDFB'; // CURRENT + REMAINING — neutral / queue
+const GOLD     = '#C5A059'; // TYPED — archival success state
+const BONE     = '#FDFDFB'; // CURRENT + REMAINING in dark mode — neutral / queue
+const GRAPHITE = '#333333'; // CURRENT + REMAINING in light mode — contrast-safe negative
 
 // Spring for scale/opacity changes — position is RAF-only, never Framer-driven
 const springConfig = { type: 'spring' as const, stiffness: 120, damping: 20 };
@@ -26,12 +27,12 @@ const springConfig = { type: 'spring' as const, stiffness: 120, damping: 20 };
 // ── CurrentCharacter ──────────────────────────────────────────────────────────
 // Isolated component so the pulse animation is scoped to this single glyph
 // and does not re-trigger on parent re-renders.
-const CurrentCharacter: React.FC<{ char: string }> = ({ char }) => (
+const CurrentCharacter: React.FC<{ char: string; neutralColor: string }> = ({ char, neutralColor }) => (
   <span
     style={{
       position:   'relative',
       display:    'inline-block',
-      color:      BONE,       // Bone White — stands out clearly from Gold typed chars
+      color:      neutralColor, // Bone White (dark) or Graphite (light) — stands out from Gold typed chars
       fontWeight: 600,
       opacity:    1,
       paddingBottom: '3px',   // clearance for the 2px underline strip
@@ -76,11 +77,15 @@ export const WordNode: React.FC<WordNodeProps> = ({
   typedLength,
   isTypable,
   isFocused,
+  theme,
   gameModeScale = 1.0,
   mousePos,
   parallaxX = 0,
   parallaxY = 0,
 }) => {
+  // Derive the neutral text colour from theme — Bone White in dark, Graphite in light.
+  // This is the single source of truth for all non-Gold, non-typed characters.
+  const neutralColor = theme === 'light' ? GRAPHITE : BONE;
   const nodeRef = useRef<HTMLDivElement>(null);
 
   // Current rendered position — exclusively written by the RAF loop
@@ -299,7 +304,7 @@ export const WordNode: React.FC<WordNodeProps> = ({
                 fontWeight:    400,
                 letterSpacing: '3px',
                 textTransform: 'lowercase',
-                color:         BONE,
+                color:         neutralColor,
               }}
             >
               {word}
@@ -368,7 +373,7 @@ export const WordNode: React.FC<WordNodeProps> = ({
                  * This restarts the pulse animation from the top, giving a
                  * crisp 'jump' sensation as the underline moves to the next char.
                  */
-                <CurrentCharacter key={`c-${typedLength}`} char={currentChar} />
+                <CurrentCharacter key={`c-${typedLength}`} char={currentChar} neutralColor={neutralColor} />
               )}
 
               {/* STATE 3 — REMAINING ─────────────────────────────────── */}
@@ -376,9 +381,9 @@ export const WordNode: React.FC<WordNodeProps> = ({
                 <span
                   key={`r-${i}`}
                   style={{
-                    color:      BONE,
+                    color:      neutralColor,
                     fontWeight: 400,
-                    opacity:    0.17,
+                    opacity:    0.17, /* ~17% — within 15-20% ghost range per brief */
                     display:    'inline-block',
                   }}
                 >
@@ -401,7 +406,7 @@ export const WordNode: React.FC<WordNodeProps> = ({
               fontFamily:    "'JetBrains Mono', monospace",
               fontSize:      '9px',
               textTransform: 'uppercase',
-              color:         BONE,
+              color:         neutralColor,
               letterSpacing: '1px',
               marginTop:     '4px',
             }}

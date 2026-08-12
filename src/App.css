@@ -3,6 +3,7 @@
 :root {
   --gold-accent:        #C5A059;
   --bone-white:         #FDFDFB;
+  --graphite:           #333333;
   --gold-tint:          rgba(197, 160, 89, 0.12);
   --gold-kinetic-fill:  rgba(197, 160, 89, 0.10); /* Hover fill — all buttons */
   --border-hairline:    1px;
@@ -18,10 +19,13 @@ body.dark-theme {
 }
 
 body.light-theme {
-  --theme-color: #1a1a1a;
+  /* In light mode the 'negative' telemetry text must read as Graphite, not Bone White */
+  --theme-color: #333333;
   --bg-color: #FDFDFB;
   --border-idle: #C5A059; /* Strictly Gold 1px border */
   --border-hover: #C5A059;
+  /* Light-mode button hover: Graphite 5% instead of Gold tint */
+  --gold-kinetic-fill: rgba(51, 51, 51, 0.05);
   background-color: var(--bg-color);
   color: var(--theme-color);
 }
@@ -179,6 +183,10 @@ body.light-theme .corner-bracket {
   border-radius: 0px;
 }
 
+body.light-theme .accuracy-stats-panel {
+  background: rgba(253, 253, 251, 0.92); /* Bone background — opaque in light mode */
+}
+
 .stat-row {
   display: flex;
   align-items: baseline;
@@ -188,7 +196,12 @@ body.light-theme .corner-bracket {
 
 .stat-label {
   opacity: 0.55;
-  color: #FDFDFB; /* Secondary Metadata: Bone White */
+  color: #FDFDFB; /* Secondary Metadata: Bone White in dark mode */
+}
+
+body.light-theme .stat-label {
+  color: #333333; /* Graphite in light mode — prevents white-on-white */
+  opacity: 0.6;
 }
 
 .stat-value {

@@ -102,7 +102,7 @@ export const BentoHub: React.FC<BentoHubProps> = ({
               <span style={{ fontSize: '10px', letterSpacing: '0.25em', color: '#C5A059' }}>
                 [ SPATIAL_TYPING_ENGINE ]
               </span>
-              <span style={{ fontSize: '10px', letterSpacing: '0.15em', color: '#FDFDFB', opacity: 0.65 }}>
+              <span style={{ fontSize: '10px', letterSpacing: '0.15em', color: theme === 'light' ? '#333333' : '#FDFDFB', opacity: 0.65 }}>
                 VECTOR_01 // 60s_STABILIZED
               </span>
             </div>
@@ -194,7 +194,7 @@ export const BentoHub: React.FC<BentoHubProps> = ({
                   fontSize: '11px',
                 }}
               >
-                <span style={{ opacity: 0.6, color: '#FDFDFB' }}>PB CHRONO:</span>
+                <span style={{ opacity: 0.6, color: theme === 'light' ? '#333333' : '#FDFDFB' }}>PB CHRONO:</span>
                 <span style={{ fontWeight: 700, color: '#C5A059' }}>{scores.Chrono || 0} PTS</span>
               </div>
 
@@ -207,7 +207,7 @@ export const BentoHub: React.FC<BentoHubProps> = ({
                   fontSize: '11px',
                 }}
               >
-                <span style={{ opacity: 0.6, color: '#FDFDFB' }}>PB OVERDRIVE:</span>
+                <span style={{ opacity: 0.6, color: theme === 'light' ? '#333333' : '#FDFDFB' }}>PB OVERDRIVE:</span>
                 <span style={{ fontWeight: 700, color: '#C5A059' }}>{scores.Overdrive || 0} PTS</span>
               </div>
             </div>
@@ -217,7 +217,7 @@ export const BentoHub: React.FC<BentoHubProps> = ({
             style={{
               fontSize: '10px',
               opacity: 0.45,
-              color: '#FDFDFB',
+              color: theme === 'light' ? '#333333' : '#FDFDFB',
               letterSpacing: '0.1em',
               lineHeight: 1.5,
               marginTop: '16px',
@@ -248,7 +248,7 @@ export const BentoHub: React.FC<BentoHubProps> = ({
               <div style={{ fontSize: '11px', letterSpacing: '0.2em', marginBottom: '12px', color: '#C5A059' }}>
                 [ GLOBAL_LEADERBOARD ]
               </div>
-              <table style={{ width: '100%', fontSize: '11px', borderCollapse: 'collapse', color: '#FDFDFB' }}>
+              <table style={{ width: '100%', fontSize: '11px', borderCollapse: 'collapse', color: theme === 'light' ? '#333333' : '#FDFDFB' }}>
                 <thead>
                   <tr style={{ borderBottom: '1px solid #C5A059', opacity: 0.55 }}>
                     <th style={{ textAlign: 'left', padding: '6px 0', color: '#C5A059' }}>MODE</th>
@@ -312,7 +312,7 @@ export const BentoHub: React.FC<BentoHubProps> = ({
               justifyContent: 'space-between',
               fontSize: '10px',
               opacity: 0.45,
-              color: '#FDFDFB',
+              color: theme === 'light' ? '#333333' : '#FDFDFB',
               letterSpacing: '0.1em',
               marginTop: '16px',
             }}
@@ -377,7 +377,7 @@ export const BentoHub: React.FC<BentoHubProps> = ({
               fontSize: '11px',
               lineHeight: 1.5,
               opacity: 0.75,
-              color: '#FDFDFB',
+              color: theme === 'light' ? '#333333' : '#FDFDFB',
             }}
           >
             {gameMode === 'Chrono' && 'Fixed 60-second speed run. Maximize WPM & score accuracy.'}

@@ -125,7 +125,7 @@ export const SessionArchive: React.FC<SessionArchiveProps> = ({
           gridTemplateColumns: 'repeat(12, 1fr)',
           gap: '16px',
           fontFamily: "'JetBrains Mono', monospace",
-          color: '#FDFDFB',
+          color: theme === 'light' ? '#333333' : '#FDFDFB',
         }}
       >
         {/* Header Module (Col-span 12) — Gold (#C5A059) */}
@@ -143,7 +143,7 @@ export const SessionArchive: React.FC<SessionArchiveProps> = ({
           }}
         >
           <div>
-            <div style={{ fontSize: '11px', letterSpacing: '0.2em', opacity: 0.55, marginBottom: '4px', color: '#FDFDFB' }}>
+            <div style={{ fontSize: '11px', letterSpacing: '0.2em', opacity: 0.55, marginBottom: '4px', color: theme === 'light' ? '#333333' : '#FDFDFB' }}>
               [ TELEMETRY_PROTOCOL ]
             </div>
             <div style={{ fontSize: '22px', fontWeight: 700, letterSpacing: '0.15em', color: '#C5A059' }}>
@@ -151,7 +151,7 @@ export const SessionArchive: React.FC<SessionArchiveProps> = ({
             </div>
           </div>
           <div style={{ textAlign: 'right' }}>
-            <div style={{ fontSize: '11px', letterSpacing: '0.15em', opacity: 0.55, color: '#FDFDFB' }}>
+            <div style={{ fontSize: '11px', letterSpacing: '0.15em', opacity: 0.55, color: theme === 'light' ? '#333333' : '#FDFDFB' }}>
               MODE: {gameMode.toUpperCase()}
             </div>
             <div style={{ fontSize: '18px', fontWeight: 700, color: '#C5A059', marginTop: '2px' }}>
@@ -222,7 +222,7 @@ export const SessionArchive: React.FC<SessionArchiveProps> = ({
               fontSize: '9px',
               letterSpacing: '0.15em',
               opacity: 0.55,
-              color: '#FDFDFB',
+              color: theme === 'light' ? '#333333' : '#FDFDFB',
             }}
           >
             PATH_NODES: {mousePath ? mousePath.length : 0} | VECTOR_RESOLUTION: 0.5PX
@@ -246,7 +246,7 @@ export const SessionArchive: React.FC<SessionArchiveProps> = ({
           <div style={{ fontSize: '36px', fontWeight: 700, color: '#C5A059', lineHeight: 1 }}>
             {peakWpm || wpm} <span style={{ fontSize: '12px', opacity: 0.65 }}>WPM</span>
           </div>
-          <div style={{ fontSize: '11px', marginTop: '12px', opacity: 0.75, color: '#FDFDFB', display: 'flex', justifyContent: 'space-between' }}>
+          <div style={{ fontSize: '11px', marginTop: '12px', opacity: 0.75, color: theme === 'light' ? '#333333' : '#FDFDFB', display: 'flex', justifyContent: 'space-between' }}>
             <span>AVG WPM:</span>
             <span style={{ fontWeight: 600 }}>{wpm}</span>
           </div>
@@ -269,7 +269,7 @@ export const SessionArchive: React.FC<SessionArchiveProps> = ({
           <div style={{ fontSize: '36px', fontWeight: 700, color: '#C5A059', lineHeight: 1 }}>
             {accuracy}%
           </div>
-          <div style={{ fontSize: '11px', marginTop: '12px', opacity: 0.75, color: '#FDFDFB', display: 'flex', justifyContent: 'space-between' }}>
+          <div style={{ fontSize: '11px', marginTop: '12px', opacity: 0.75, color: theme === 'light' ? '#333333' : '#FDFDFB', display: 'flex', justifyContent: 'space-between' }}>
             <span>KEYS:</span>
             <span style={{ fontWeight: 600 }}>{correctKeys} / {correctKeys + incorrectKeys}</span>
           </div>
@@ -292,7 +292,7 @@ export const SessionArchive: React.FC<SessionArchiveProps> = ({
           <div style={{ fontSize: '36px', fontWeight: 700, color: '#C5A059', lineHeight: 1 }}>
             x{flowStreak} <span style={{ fontSize: '12px', opacity: 0.65 }}>STREAK</span>
           </div>
-          <div style={{ fontSize: '11px', marginTop: '12px', opacity: 0.75, color: '#FDFDFB', display: 'flex', justifyContent: 'space-between' }}>
+          <div style={{ fontSize: '11px', marginTop: '12px', opacity: 0.75, color: theme === 'light' ? '#333333' : '#FDFDFB', display: 'flex', justifyContent: 'space-between' }}>
             <span>SYNERGY BONUS:</span>
             <span style={{ fontWeight: 600 }}>+{synergyPoints * 100} PTS</span>
           </div>

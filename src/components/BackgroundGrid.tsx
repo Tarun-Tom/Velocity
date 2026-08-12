@@ -129,8 +129,10 @@ export const BackgroundGrid: React.FC<BackgroundGridProps> = ({
       const activeImplosions = implosionsRef.current.filter((imp) => now - imp.time < 300);
       implosionsRef.current = activeImplosions;
 
-      const dotColor = currentTheme === 'light' ? 'rgba(0, 0, 0, 0.08)' : 'rgba(253, 253, 251, 0.08)';
-      const activeDotColor = currentTheme === 'light' ? 'rgba(0, 0, 0, 0.28)' : 'rgba(253, 253, 251, 0.28)';
+      // Light mode: Graphite (#333333) at 10% idle / 28% active — clearly visible, non-distracting
+      // Dark mode:  Bone White (#FDFDFB) at 8% idle / 28% active
+      const dotColor      = currentTheme === 'light' ? 'rgba(51, 51, 51, 0.10)' : 'rgba(253, 253, 251, 0.08)';
+      const activeDotColor = currentTheme === 'light' ? 'rgba(51, 51, 51, 0.28)' : 'rgba(253, 253, 251, 0.28)';
       const tetherColor = '#C5A059'; // Gold status accent
 
       // Read live mouse position from ref (never causes loop restart)

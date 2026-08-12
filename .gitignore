@@ -1,5 +1,15 @@
-# Logs
-logs
+# ── Dependencies ─────────────────────────────────────────────
+node_modules/
+
+# ── Build Output ─────────────────────────────────────────────
+dist/
+dist-ssr/
+
+# ── Deployment ────────────────────────────────────────────────
+.vercel/
+
+# ── Logs ─────────────────────────────────────────────────────
+logs/
 *.log
 npm-debug.log*
 yarn-debug.log*
@@ -7,18 +17,29 @@ yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
 
-node_modules
-dist
-dist-ssr
+# ── Environment / Secrets ─────────────────────────────────────
+.env
+.env.*
+.env.local
+.env.*.local
 *.local
 
-# Editor directories and files
-.vscode/*
-!.vscode/extensions.json
-.idea
+# ── OS Artifacts ─────────────────────────────────────────────
 .DS_Store
+Thumbs.db
+
+# ── Editor Artifacts ─────────────────────────────────────────
+.vscode/
+!.vscode/extensions.json
+.idea/
 *.suo
 *.ntvs*
 *.njsproj
 *.sln
 *.sw?
+
+# ── Agent & Design System ─────────────────────────────────────
+# These ship with the repo so skills & design context travel with it.
+!.agents/
+!.impeccable/
+!.impeccable.md

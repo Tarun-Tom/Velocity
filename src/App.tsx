@@ -11,6 +11,7 @@ import { audioController } from './utils/audio';
 import { Volume2, VolumeX, Moon, Sun, RotateCcw } from 'lucide-react';
 import { useMouseMove } from './hooks/useMouseMove';
 import './App.css';
+import { DESIGN_DICTIONARY, shuffleArray } from './constants/words';
 
 interface WordItem {
   id: string;
@@ -30,28 +31,6 @@ interface LeaderboardEntry {
   accuracy: number;
   date: string;
 }
-
-const WORD_POOL = [
-  'Minimalism', 'Brutalism', 'Kerning', 'Kinetic', 'Velocity', 'Interface', 'Bauhaus', 
-  'Bezier', 'Opacity', 'Saturation', 'Monochrome', 'Grid', 'Layout', 'Prototype', 
-  'Wireframe', 'Gradient', 'Skeuomorphism', 'Neumorphism', 'Contrast', 'Hierarchy', 
-  'Alignment', 'Padding', 'Margin', 'Flexbox', 'Raster', 'Vector', 'Resolution', 
-  'Typography', 'Ascender', 'Descender', 'Ligature', 'Sans-serif', 'Slab-serif', 
-  'Geometric', 'Humanist', 'Navigation', 'Experience', 'Interaction', 'Responsive', 
-  'Framework', 'Component', 'Variable', 'Animation', 'Transition', 'Easing', 
-  'Parallax', 'Depth', 'Spatial', 'Haptic', 'Feedback',
-  'Anti-aliasing', 'Baseline', 'Cap-height', 'X-height', 'Aperture', 'Apex', 'Bowl', 
-  'Counter', 'Stem', 'Terminal', 'Crossbar', 'Cross-stroke', 'Arm', 'Leg', 'Shoulder', 
-  'Ear', 'Link', 'Crotch', 'Swash', 'Italic', 'Roman', 'Bold', 'Small-caps', 'Diacritic', 
-  'Widow', 'Orphan', 'Typographic', 'Condensed', 'Monospaced', 'Bracket', 'Copyfitting', 
-  'Leading', 'Tracking', 'Glyph', 'Serif', 'Asymmetry', 'Modernism', 'Aesthetic',
-  'Wireframing', 'Interactivity', 'Usability', 'Accessibility', 'Mockup', 
-  'Moodboard', 'Brandmark', 'Logotype', 'Concept', 'Visual', 'Symmetry', 'Proximity',
-  'Scale', 'Emphasis', 'Unity', 'Movement', 'Pattern', 'Rhythm', 'Balance', 'Harmony',
-  'Bleed', 'Colorway', 'Palette', 'Dithering', 'Halftone', 'Pica', 'Folio', 'Gutter',
-  'Auto-layout', 'Subgrid', 'Custom-properties', 'Keyframes', 'SVG', 'WebGL', 'Rasterization'
-];
-
 // ── Synergy constants ──────────────────────────────────────────────────────────
 // SynergyWindow = BASE_SYNERGY_MS + (distance / VELOCITY_CONSTANT)
 // A word 600px away gives ~1100ms window; a word 60px away gives ~600ms.
@@ -94,6 +73,8 @@ function App() {
 
   // Gameplay State
   const [words, setWords] = useState<WordItem[]>([]);
+  const [, setWordsPool] = useState<string[]>([]);
+  const wordsPoolRef = useRef<string[]>([]);
   const [focusedWordId, setFocusedWordId] = useState<string | null>(null);
   
   // Grid Implosion State
@@ -347,6 +328,17 @@ function App() {
     };
   }, []);
 
+  const getNextWordFromPool = useCallback((): string => {
+    if (wordsPoolRef.current.length === 0) {
+      const freshPool = shuffleArray([...DESIGN_DICTIONARY]);
+      wordsPoolRef.current = freshPool;
+      setWordsPool(freshPool);
+    }
+    const nextWord = wordsPoolRef.current.shift()!;
+    setWordsPool([...wordsPoolRef.current]);
+    return nextWord;
+  }, []);
+
   const isTooClose = useCallback((newX: number, newY: number, existingWords: WordItem[]) => {
     return existingWords.some(w => {
       const dx = w.x - newX;
@@ -356,11 +348,11 @@ function App() {
   }, []);
 
   const spawnWord = useCallback((existingWords: WordItem[], forceQuadrant?: number): WordItem => {
-    let randomWord = WORD_POOL[Math.floor(Math.random() * WORD_POOL.length)];
+    let randomWord = getNextWordFromPool();
     let attempts = 0;
     
     while (existingWords.some(w => w.word.toLowerCase() === randomWord.toLowerCase()) && attempts < 15) {
-      randomWord = WORD_POOL[Math.floor(Math.random() * WORD_POOL.length)];
+      randomWord = getNextWordFromPool();
       attempts++;
     }
 
@@ -403,10 +395,15 @@ function App() {
       scale: 0.95,
       spawnTime: Date.now()
     };
-  }, [getPositionInQuadrant, isTooClose]);
+  }, [getPositionInQuadrant, isTooClose, getNextWordFromPool]);
 
   // Initialize game session
   const initializeGame = () => {
+    if (wordsPoolRef.current.length === 0) {
+      const freshPool = shuffleArray([...DESIGN_DICTIONARY]);
+      wordsPoolRef.current = freshPool;
+      setWordsPool(freshPool);
+    }
     let initialList: WordItem[] = [];
     stateRef.current.gameMode = gameMode;
     mousePathRef.current = []; // Clear recorded mouse trajectory for new signature

@@ -6,6 +6,7 @@ import { VariableTitle } from './components/VariableTitle';
 import { BentoHub, type GameMode } from './components/BentoHub';
 import { SessionArchive } from './components/SessionArchive';
 import { CinematicAtmosphere } from './components/CinematicAtmosphere';
+import { MobileGuard } from './components/MobileGuard';
 import { audioController } from './utils/audio';
 import { Volume2, VolumeX, Moon, Sun, RotateCcw } from 'lucide-react';
 import { useMouseMove } from './hooks/useMouseMove';
@@ -63,6 +64,21 @@ function App() {
   const [isGameOver, setIsGameOver] = useState(false);
   const [showLeaderboard, setShowLeaderboard] = useState(false);
   const [muted, setMuted] = useState(false);
+
+  const [isMobile, setIsMobile] = useState<boolean>(() => {
+    if (typeof window !== 'undefined') {
+      return window.innerWidth < 1024;
+    }
+    return false;
+  });
+
+  useEffect(() => {
+    const handleResize = () => {
+      setIsMobile(window.innerWidth < 1024);
+    };
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
 
   // Consolidated mouse listener hook (origin: Viewport Center, Stiffness: 100, Damping: 20)
   const mouseState = useMouseMove();
@@ -746,222 +762,229 @@ function App() {
 
   return (
     <>
-      <div className="game-container">
-        {/* Architectural Viewfinder Corner Brackets */}
-        <div className="corner-bracket top-left"></div>
-        <div className="corner-bracket top-right"></div>
-        <div className="corner-bracket bottom-left"></div>
-        <div className="corner-bracket bottom-right"></div>
-
-        {/* Cinematic Atmosphere (3% film grain overlay & digital fog noise texture) */}
-        <CinematicAtmosphere theme={theme} />
-
-        {/* Neural Tether Canvas Background */}
-        <BackgroundGrid
-          theme={theme}
-          words={words.map(w => ({
-            x: w.x + fgParallaxX,
-            y: w.y + fgParallaxY,
-            isTypable: isWithinRadius(w.x, w.y, mousePos.x, mousePos.y),
-            isFocused: w.id === focusedWordId,
-          }))}
-          implosion={implosion}
-          frictionActive={frictionActive}
-          mousePos={mousePos}
-          synergyPing={synergyPing}
-        />
-
-        {/* Interactive Word Nodes Space */}
-        <div className="interactive-area">
-          {isPlaying &&
-            words.map(w => (
-              <WordNode
-                key={w.id}
-                word={w.word}
-                x={w.x}
-                y={w.y}
-                typedLength={w.typedLength}
-                isTypable={isWithinRadius(w.x, w.y, mousePos.x, mousePos.y)}
-                isFocused={w.id === focusedWordId}
-                theme={theme}
-                mousePos={mousePos}
-                parallaxX={fgParallaxX}
-                parallaxY={fgParallaxY}
-              />
-            ))}
-        </div>
-
-        {/* ACTIVE GAME PLAY HUD */}
-        {isPlaying && (
-          <div className="active-hud-overlay">
-            {/* Top-Left: Proximity Variable Title */}
-            <div className="hud-logo-container">
-              <VariableTitle mousePos={mousePos} onClick={triggerGameOver} />
-            </div>
-
-            {/* Top-Right: Game controls */}
-            <div className="hud-controls">
-              <VelocityButton
-                onClick={() => setMuted(!muted)}
-                ariaLabel={muted ? 'Unmute' : 'Mute'}
-              >
-                {muted ? <VolumeX size={14} /> : <Volume2 size={14} />}
-              </VelocityButton>
-              <VelocityButton
-                onClick={() => setTheme(theme === 'light' ? 'dark' : 'light')}
-                ariaLabel="Toggle theme"
-              >
-                {theme === 'light' ? <Moon size={14} /> : <Sun size={14} />}
-              </VelocityButton>
-              <VelocityButton
-                onClick={initializeGame}
-                ariaLabel="Reset Game"
-              >
-                <RotateCcw size={14} />
-              </VelocityButton>
-              <VelocityButton
-                onClick={triggerGameOver}
-                ariaLabel="Quit Game"
-              >
-                [ QUIT ]
-              </VelocityButton>
-            </div>
-
-            {/* Bottom-Left: Telemetry HUD stats */}
-            <div className="accuracy-stats-panel">
-              <div className="stat-row">
-                <span className="stat-label">MODE:</span>
-                <span className="stat-value">{gameMode.toUpperCase()}</span>
-              </div>
-              {(gameMode === 'Chrono' || gameMode === 'Overdrive') && (
-                <div className="stat-row">
-                  <span className="stat-label">TIME:</span>
-                  <span className="stat-value">{timeLeft}S</span>
-                </div>
-              )}
-              {gameMode !== 'Zen' && (
-                <div className="stat-row">
-                  <span className="stat-label">SCORE:</span>
-                  <span className="stat-value">{score}</span>
-                </div>
-              )}
-              <div className="stat-row">
-                <span className="stat-label">WPM:</span>
-                <span className="stat-value">{currentWpm}</span>
-              </div>
-              <div className="stat-row">
-                <span className="stat-label">ACC:</span>
-                <span className="stat-value">{accuracy}%</span>
-              </div>
-              <div className="stat-row">
-                <span className="stat-label">WORDS:</span>
-                <span className="stat-value">{completedWordsCount}</span>
-              </div>
-              {flowStreak > 0 && gameMode !== 'Zen' && (
-                <div className="stat-row">
-                  <span className="stat-label">FLOW:</span>
-                  <span className="stat-value">x{flowStreak + 1}</span>
-                </div>
-              )}
-            </div>
-
-            {/* Bottom-Right / Background: Ghost WPM + Momentum Bar */}
-            <div 
-              className="massive-wpm-container" 
-              style={{ 
-                transform: `translate(${bgParallaxX}px, ${bgParallaxY}px)`
-              }}
-            >
-              {currentWpm > 0 ? currentWpm : '00'}
-            </div>
-
-            {/*
-             * Momentum Bar — 1px Gold horizontal strip that drains over the
-             * synergy window duration. Positioned directly beneath the Ghost WPM.
-             * Width is mutated directly via ref to avoid re-renders.
-             */}
-            <div
-              className="momentum-bar-track"
-              style={{ transform: `translate(${bgParallaxX}px, ${bgParallaxY}px)` }}
-            >
-              <div ref={momentumBarRef} className="momentum-bar-fill" />
-            </div>
-
-            <div 
-              className={`ghost-synergy-flash ${showSynergyFlash ? 'active' : ''} ${isPerfectSynergy ? 'perfect' : ''}`} 
-              style={{ 
-                transform: `translate(${bgParallaxX}px, ${bgParallaxY}px)`
-              }}
-            >
-              {isPerfectSynergy ? 'PERFECT' : `${synergyPoints} SYNERGY`}
-            </div>
-          </div>
-        )}
-
-        {/* 1. ASYMMETRIC BENTO HUB (START / HUB SCREEN OVERLAY) */}
-        {!isPlaying && !isGameOver && (
-          <BentoHub
+      <CinematicAtmosphere theme={theme} />
+      {isMobile ? (
+        <>
+          <BackgroundGrid
             theme={theme}
-            setTheme={setTheme}
-            muted={muted}
-            setMuted={setMuted}
-            showLeaderboard={showLeaderboard}
-            setShowLeaderboard={setShowLeaderboard}
-            gameMode={gameMode}
-            setGameMode={setGameMode}
-            scores={scores}
-            getLeaderboardData={getLeaderboardData}
+            words={[]}
+            implosion={null}
+            frictionActive={false}
             mousePos={mousePos}
-            onBeginSession={initializeGame}
           />
-        )}
+          <MobileGuard />
+        </>
+      ) : (
+        <div className="game-container">
+          {/* Architectural Viewfinder Corner Brackets */}
+          <div className="corner-bracket top-left"></div>
+          <div className="corner-bracket top-right"></div>
+          <div className="corner-bracket bottom-left"></div>
+          <div className="corner-bracket bottom-right"></div>
 
-        {/* 4. THE SESSION ARCHIVE (SCORE SCREEN UPON GAME COMPLETION) */}
-        {isGameOver && (
-          <SessionArchive
-            score={score}
-            wpm={currentWpm}
-            peakWpm={peakWpm}
-            accuracy={accuracy}
-            correctKeys={correctKeys}
-            incorrectKeys={incorrectKeys}
-            flowStreak={flowStreak}
-            synergyPoints={synergyPoints}
-            gameMode={gameMode}
-            mousePath={mousePathRef.current}
-            onRecalibrate={initializeGame}
-            onReturnToNucleus={() => {
-              // Full state reset — return to clean hub screen
-              setIsGameOver(false);
-              setIsPlaying(false);
-              setWords([]);
-              setFocusedWordId(null);
-              setCorrectKeys(0);
-              setIncorrectKeys(0);
-              setCompletedWordsCount(0);
-              setStartTime(null);
-              setCurrentWpm(0);
-              setPeakWpm(0);
-              setLastCompletionTime(null);
-              setFlowStreak(0);
-              setSynergyPoints(0);
-              setShowSynergyFlash(false);
-              setIsPerfectSynergy(false);
-              setFrictionActive(false);
-              setImplosion(null);
-              setSynergyPing(null);
-              setShowLeaderboard(false);
-              if (momentumDecayTimeoutRef.current) clearTimeout(momentumDecayTimeoutRef.current);
-              if (momentumDecayRef.current) clearInterval(momentumDecayRef.current);
-              if (momentumAnimRef.current) cancelAnimationFrame(momentumAnimRef.current);
-              if (momentumBarRef.current) momentumBarRef.current.style.width = '0%';
-              keystrokesTimeline.current = [];
-              mousePathRef.current = [];
-            }}
+          {/* Neural Tether Canvas Background */}
+          <BackgroundGrid
             theme={theme}
+            words={words.map(w => ({
+              x: w.x + fgParallaxX,
+              y: w.y + fgParallaxY,
+              isTypable: isWithinRadius(w.x, w.y, mousePos.x, mousePos.y),
+              isFocused: w.id === focusedWordId,
+            }))}
+            implosion={implosion}
+            frictionActive={frictionActive}
+            mousePos={mousePos}
+            synergyPing={synergyPing}
           />
-        )}
-      </div>
+
+          {/* Interactive Word Nodes Space */}
+          <div className="interactive-area">
+            {isPlaying &&
+              words.map(w => (
+                <WordNode
+                  key={w.id}
+                  word={w.word}
+                  x={w.x}
+                  y={w.y}
+                  typedLength={w.typedLength}
+                  isTypable={isWithinRadius(w.x, w.y, mousePos.x, mousePos.y)}
+                  isFocused={w.id === focusedWordId}
+                  theme={theme}
+                  mousePos={mousePos}
+                  parallaxX={fgParallaxX}
+                  parallaxY={fgParallaxY}
+                />
+              ))}
+          </div>
+
+          {/* ACTIVE GAME PLAY HUD */}
+          {isPlaying && (
+            <div className="active-hud-overlay">
+              {/* Top-Left: Proximity Variable Title */}
+              <div className="hud-logo-container">
+                <VariableTitle mousePos={mousePos} onClick={triggerGameOver} />
+              </div>
+
+              {/* Top-Right: Game controls */}
+              <div className="hud-controls">
+                <VelocityButton
+                  onClick={() => setMuted(!muted)}
+                  ariaLabel={muted ? 'Unmute' : 'Mute'}
+                >
+                  {muted ? <VolumeX size={14} /> : <Volume2 size={14} />}
+                </VelocityButton>
+                <VelocityButton
+                  onClick={() => setTheme(theme === 'light' ? 'dark' : 'light')}
+                  ariaLabel="Toggle theme"
+                >
+                  {theme === 'light' ? <Moon size={14} /> : <Sun size={14} />}
+                </VelocityButton>
+                <VelocityButton
+                  onClick={initializeGame}
+                  ariaLabel="Reset Game"
+                >
+                  <RotateCcw size={14} />
+                </VelocityButton>
+                <VelocityButton
+                  onClick={triggerGameOver}
+                  ariaLabel="Quit Game"
+                >
+                  [ QUIT ]
+                </VelocityButton>
+              </div>
+
+              {/* Bottom-Left: Telemetry HUD stats */}
+              <div className="accuracy-stats-panel">
+                <div className="stat-row">
+                  <span className="stat-label">MODE:</span>
+                  <span className="stat-value">{gameMode.toUpperCase()}</span>
+                </div>
+                {(gameMode === 'Chrono' || gameMode === 'Overdrive') && (
+                  <div className="stat-row">
+                    <span className="stat-label">TIME:</span>
+                    <span className="stat-value">{timeLeft}S</span>
+                  </div>
+                )}
+                {gameMode !== 'Zen' && (
+                  <div className="stat-row">
+                    <span className="stat-label">SCORE:</span>
+                    <span className="stat-value">{score}</span>
+                  </div>
+                )}
+                <div className="stat-row">
+                  <span className="stat-label">WPM:</span>
+                  <span className="stat-value">{currentWpm}</span>
+                </div>
+                <div className="stat-row">
+                  <span className="stat-label">ACC:</span>
+                  <span className="stat-value">{accuracy}%</span>
+                </div>
+                <div className="stat-row">
+                  <span className="stat-label">WORDS:</span>
+                  <span className="stat-value">{completedWordsCount}</span>
+                </div>
+                {flowStreak > 0 && gameMode !== 'Zen' && (
+                  <div className="stat-row">
+                    <span className="stat-label">FLOW:</span>
+                    <span className="stat-value">x{flowStreak + 1}</span>
+                  </div>
+                )}
+              </div>
+
+              {/* Bottom-Right / Background: Ghost WPM + Momentum Bar */}
+              <div 
+                className="massive-wpm-container" 
+                style={{ 
+                  transform: `translate(${bgParallaxX}px, ${bgParallaxY}px)`
+                }}
+              >
+                {currentWpm > 0 ? currentWpm : '00'}
+              </div>
+
+              {/* Momentum Bar Track */}
+              <div
+                className="momentum-bar-track"
+                style={{ transform: `translate(${bgParallaxX}px, ${bgParallaxY}px)` }}
+              >
+                <div ref={momentumBarRef} className="momentum-bar-fill" />
+              </div>
+
+              <div 
+                className={`ghost-synergy-flash ${showSynergyFlash ? 'active' : ''} ${isPerfectSynergy ? 'perfect' : ''}`} 
+                style={{ 
+                  transform: `translate(${bgParallaxX}px, ${bgParallaxY}px)`
+                }}
+              >
+                {isPerfectSynergy ? 'PERFECT' : `${synergyPoints} SYNERGY`}
+              </div>
+            </div>
+          )}
+
+          {/* 1. ASYMMETRIC BENTO HUB (START / HUB SCREEN OVERLAY) */}
+          {!isPlaying && !isGameOver && (
+            <BentoHub
+              theme={theme}
+              setTheme={setTheme}
+              muted={muted}
+              setMuted={setMuted}
+              showLeaderboard={showLeaderboard}
+              setShowLeaderboard={setShowLeaderboard}
+              gameMode={gameMode}
+              setGameMode={setGameMode}
+              scores={scores}
+              getLeaderboardData={getLeaderboardData}
+              mousePos={mousePos}
+              onBeginSession={initializeGame}
+            />
+          )}
+
+          {/* 4. THE SESSION ARCHIVE (SCORE SCREEN UPON GAME COMPLETION) */}
+          {isGameOver && (
+            <SessionArchive
+              score={score}
+              wpm={currentWpm}
+              peakWpm={peakWpm}
+              accuracy={accuracy}
+              correctKeys={correctKeys}
+              incorrectKeys={incorrectKeys}
+              flowStreak={flowStreak}
+              synergyPoints={synergyPoints}
+              gameMode={gameMode}
+              mousePath={mousePathRef.current}
+              onRecalibrate={initializeGame}
+              onReturnToNucleus={() => {
+                setIsGameOver(false);
+                setIsPlaying(false);
+                setWords([]);
+                setFocusedWordId(null);
+                setCorrectKeys(0);
+                setIncorrectKeys(0);
+                setCompletedWordsCount(0);
+                setStartTime(null);
+                setCurrentWpm(0);
+                setPeakWpm(0);
+                setLastCompletionTime(null);
+                setFlowStreak(0);
+                setSynergyPoints(0);
+                setShowSynergyFlash(false);
+                setIsPerfectSynergy(false);
+                setFrictionActive(false);
+                setImplosion(null);
+                setSynergyPing(null);
+                setShowLeaderboard(false);
+                if (momentumDecayTimeoutRef.current) clearTimeout(momentumDecayTimeoutRef.current);
+                if (momentumDecayRef.current) clearInterval(momentumDecayRef.current);
+                if (momentumAnimRef.current) cancelAnimationFrame(momentumAnimRef.current);
+                if (momentumBarRef.current) momentumBarRef.current.style.width = '0%';
+                keystrokesTimeline.current = [];
+                keystrokesTimeline.current = [];
+                mousePathRef.current = [];
+              }}
+              theme={theme}
+            />
+          )}
+        </div>
+      )}
     </>
   );
 }

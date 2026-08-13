@@ -14,7 +14,7 @@ export const CinematicAtmosphere: React.FC<CinematicAtmosphereProps> = ({ theme 
           position: 'fixed',
           inset: 0,
           pointerEvents: 'none',
-          zIndex: 99,
+          zIndex: 100000,
           opacity: 0.03, // Strictly 3% opacity film grain
           mixBlendMode: theme === 'dark' ? 'screen' : 'multiply',
         }}

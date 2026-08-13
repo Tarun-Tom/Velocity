@@ -160,11 +160,25 @@ export const BackgroundGrid: React.FC<BackgroundGridProps> = ({
       // rest position regardless of browser window size.
       const centerX = width / 2;
       const centerY = height / 2;
-      const normalizedX = mx === -1000 ? 0 : mx - centerX;
-      const normalizedY = my === -1000 ? 0 : my - centerY;
 
-      const targetParallaxX = normalizedX * 0.03;
-      const targetParallaxY = normalizedY * 0.03;
+      // Lazy Drift on mobile/no-mouse: smooth sine oscillation to keep grid alive
+      let targetParallaxX = 0;
+      let targetParallaxY = 0;
+
+      if (mx === -1000 || (typeof window !== 'undefined' && window.innerWidth < 1024)) {
+        // Continuous steady low-speed terminal drift: x += 0.2, y += 0.1 equivalent rate
+        const lazyTime = now * 0.0008;
+        targetParallaxX = Math.sin(lazyTime) * 12;
+        targetParallaxY = Math.cos(lazyTime * 0.8) * 12;
+        // Constant, very low speed drift per second (12px/s X, 6px/s Y ≈ 0.2/0.1 per frame at 60fps)
+        driftRef.current.x += (12 * delta) / 1000;
+        driftRef.current.y += (6 * delta) / 1000;
+      } else {
+        const normalizedX = mx - centerX;
+        const normalizedY = my - centerY;
+        targetParallaxX = normalizedX * 0.03;
+        targetParallaxY = normalizedY * 0.03;
+      }
 
       // ── Spring-Damped Parallax: Grid has 'mass' and 'inertia' ─────────────
       // Uses a critically-damped spring so the grid trails the cursor

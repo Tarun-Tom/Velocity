@@ -482,6 +482,11 @@ export const BentoHub: React.FC<BentoHubProps> = ({
         </Module>
 
       </div>
+
+      {/* Project Signature */}
+      <div className="project-signature">
+        TARUN_TOM // 2026
+      </div>
     </motion.div>
   );
 };

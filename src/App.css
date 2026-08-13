@@ -385,3 +385,25 @@ body.light-theme .stat-label {
   75% { opacity: 1; color: #FFF3B3; }
   100% { opacity: 1; color: #C5A059; }
 }
+
+/* Project Signature — Impeccable Ghost Signature Calibration */
+.project-signature {
+  position: fixed;
+  bottom: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  letter-spacing: 0.2em;
+  color: #FDFDFB;
+  opacity: 0.25;
+  pointer-events: auto;
+  user-select: none;
+  z-index: 60;
+  transition: color 0.5s ease-out, opacity 0.5s ease-out;
+}
+
+.project-signature:hover {
+  color: #C5A059;
+  opacity: 0.8;
+}

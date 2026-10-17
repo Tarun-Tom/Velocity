@@ -10,6 +10,8 @@ import { MobileGuard } from './components/MobileGuard';
 import { audioController } from './utils/audio';
 import { Volume2, VolumeX, Moon, Sun, RotateCcw } from 'lucide-react';
 import { useMouseMove } from './hooks/useMouseMove';
+import { AnimatePresence } from 'framer-motion';
+import { MultiplayerLobby } from './components/MultiplayerLobby';
 import './App.css';
 import { DESIGN_DICTIONARY, shuffleArray } from './constants/words';
 
@@ -43,6 +45,7 @@ function App() {
   const [isGameOver, setIsGameOver] = useState(false);
   const [showLeaderboard, setShowLeaderboard] = useState(false);
   const [muted, setMuted] = useState(false);
+  const [isMultiplayerOpen, setIsMultiplayerOpen] = useState(false);
 
   const [isMobile, setIsMobile] = useState<boolean>(() => {
     if (typeof window !== 'undefined') {
@@ -932,8 +935,24 @@ function App() {
               getLeaderboardData={getLeaderboardData}
               mousePos={mousePos}
               onBeginSession={initializeGame}
+              onOpenMultiplayer={() => setIsMultiplayerOpen(true)}
             />
           )}
+
+          {/* REALTIME MULTIPLAYER ARENA LOBBY */}
+          <AnimatePresence>
+            {isMultiplayerOpen && (
+              <MultiplayerLobby
+                theme={theme}
+                onClose={() => setIsMultiplayerOpen(false)}
+                onLaunchGame={(payload) => {
+                  console.log('[MULTIPLAYER GAME LAUNCH PROTOCOL]', payload);
+                  setIsMultiplayerOpen(false);
+                  initializeGame();
+                }}
+              />
+            )}
+          </AnimatePresence>
 
           {/* 4. THE SESSION ARCHIVE (SCORE SCREEN UPON GAME COMPLETION) */}
           {isGameOver && (

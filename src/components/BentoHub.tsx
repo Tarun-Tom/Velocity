@@ -28,6 +28,7 @@ export interface BentoHubProps {
   getLeaderboardData?: () => LeaderboardEntry[];
   mousePos: { x: number; y: number };
   onBeginSession: () => void;
+  onOpenMultiplayer?: () => void;
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -42,8 +43,10 @@ export const BentoHub: React.FC<BentoHubProps> = ({
   setGameMode,
   mousePos,
   onBeginSession,
+  onOpenMultiplayer,
 }) => {
-  const [, setIsCtaHovered] = useState(false);
+  const [isSoloHovered, setIsSoloHovered] = useState(false);
+  const [isArenaHovered, setIsArenaHovered] = useState(false);
 
   // Keyboard shortcut: Press ENTER to begin session immediately
   useEffect(() => {
@@ -302,47 +305,165 @@ export const BentoHub: React.FC<BentoHubProps> = ({
             </AnimatePresence>
           </div>
 
-          {/* 5. Primary CTA: Solid Gold slab, black text, radiant bloom hover & spring press */}
-          <motion.button
-            type="button"
-            onClick={onBeginSession}
-            onMouseEnter={() => setIsCtaHovered(true)}
-            onMouseLeave={() => setIsCtaHovered(false)}
-            whileHover={{
-              scale: 1.02,
-              boxShadow: isLight
-                ? '0 0 20px rgba(154, 118, 46, 0.60), 0 0 45px rgba(154, 118, 46, 0.40), 0 0 80px rgba(154, 118, 46, 0.25), 0 0 120px rgba(154, 118, 46, 0.15)'
-                : '0 0 20px rgba(197, 160, 89, 0.65), 0 0 45px rgba(197, 160, 89, 0.45), 0 0 80px rgba(197, 160, 89, 0.30), 0 0 120px rgba(197, 160, 89, 0.18)',
-            }}
-            whileTap={{ scale: 0.97 }}
-            transition={{ type: 'spring', stiffness: 480, damping: 24 }}
-            className="landing-primary-cta"
-            style={{
-              position: 'relative',
-              fontFamily: "'JetBrains Mono', monospace",
-              fontSize: '13.5px',
-              fontWeight: 800,
-              letterSpacing: '0.22em',
-              textTransform: 'uppercase',
-              background: goldColor, // Solid Gold slab (#C5A059 dark / #9A762E light)
-              color: '#000000', // Black text
-              border: `1px solid ${goldColor}`,
-              borderRadius: 0,
-              padding: '16px 46px',
-              cursor: 'pointer',
-              outline: 'none',
-              marginBottom: '46px',
-              display: 'inline-flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              boxShadow: isLight
-                ? '0 0 12px rgba(154, 118, 46, 0.25)'
-                : '0 0 12px rgba(197, 160, 89, 0.25)',
-              transition: 'background-color 0.3s ease, border-color 0.3s ease',
-            }}
-          >
-            [ BEGIN SESSION ]
-          </motion.button>
+          {/* 5. Dual Entry Points: Primary Anchor (Singleplayer) & Secondary Satellite (Multiplayer) */}
+          <div className="landing-cta-container">
+            {/* Button 1: The Primary Anchor (Singleplayer) */}
+            <motion.button
+              type="button"
+              onClick={onBeginSession}
+              onMouseEnter={() => setIsSoloHovered(true)}
+              onMouseLeave={() => setIsSoloHovered(false)}
+              whileHover={{
+                scale: 1.01,
+                boxShadow: isLight
+                  ? '0 0 20px rgba(154, 118, 46, 0.40), 0 0 50px rgba(154, 118, 46, 0.15)'
+                  : '0 0 20px rgba(197, 160, 89, 0.40), 0 0 50px rgba(197, 160, 89, 0.15)',
+              }}
+              whileTap={{ scale: 0.98 }}
+              transition={{ type: 'spring', stiffness: 500, damping: 25 }}
+              className="landing-btn-solo"
+              style={{
+                position: 'relative',
+                height: '86px',
+                borderRadius: 0,
+                background: isLight ? '#9A762E' : '#C5A059',
+                color: isLight ? '#FAF7F2' : '#000000',
+                border: `1px solid ${isLight ? '#9A762E' : '#C5A059'}`,
+                padding: '16px 20px',
+                cursor: 'pointer',
+                outline: 'none',
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                justifyContent: 'center',
+                boxSizing: 'border-box',
+                boxShadow: isSoloHovered
+                  ? isLight
+                    ? '0 0 20px rgba(154, 118, 46, 0.40), 0 0 50px rgba(154, 118, 46, 0.15)'
+                    : '0 0 20px rgba(197, 160, 89, 0.40), 0 0 50px rgba(197, 160, 89, 0.15)'
+                  : 'none',
+                transition: 'background-color 0.25s ease, border-color 0.25s ease, box-shadow 0.3s cubic-bezier(0.22, 1, 0.36, 1)',
+              }}
+            >
+              <span
+                style={{
+                  fontFamily: "'JetBrains Mono', monospace",
+                  fontSize: '13px',
+                  fontWeight: 800,
+                  letterSpacing: '0.24em',
+                  textTransform: 'uppercase',
+                  lineHeight: 1.2,
+                }}
+              >
+                01 · SOLO FLOW
+              </span>
+              <span
+                style={{
+                  fontFamily: "'JetBrains Mono', monospace",
+                  fontSize: '11px',
+                  letterSpacing: '0.04em',
+                  opacity: 0.60,
+                  marginTop: '6px',
+                  lineHeight: 1.2,
+                }}
+              >
+                Instant benchmark calibration
+              </span>
+            </motion.button>
+
+            {/* Button 2: The Secondary Satellite (Multiplayer) */}
+            <motion.button
+              type="button"
+              onClick={() => {
+                if (onOpenMultiplayer) {
+                  onOpenMultiplayer();
+                } else {
+                  console.log('[ARENA_LOBBY: INITIALIZED]');
+                }
+              }}
+              onMouseEnter={() => setIsArenaHovered(true)}
+              onMouseLeave={() => setIsArenaHovered(false)}
+              whileHover={{
+                scale: 1.01,
+              }}
+              whileTap={{ scale: 0.98 }}
+              transition={{ type: 'spring', stiffness: 500, damping: 25 }}
+              className="landing-btn-arena"
+              style={{
+                position: 'relative',
+                height: '86px',
+                borderRadius: 0,
+                background: isArenaHovered
+                  ? isLight
+                    ? 'rgba(154, 118, 46, 0.10)'
+                    : 'rgba(197, 160, 89, 0.10)'
+                  : isLight
+                  ? '#FAF7F2'
+                  : '#000000',
+                color: isLight ? '#1E1C19' : '#FDFDFB',
+                border: `1px solid ${
+                  isArenaHovered
+                    ? goldColor
+                    : isLight
+                    ? 'rgba(154, 118, 46, 0.40)'
+                    : 'rgba(197, 160, 89, 0.40)'
+                }`,
+                padding: '16px 20px',
+                cursor: 'pointer',
+                outline: 'none',
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                justifyContent: 'center',
+                boxSizing: 'border-box',
+                boxShadow: isArenaHovered
+                  ? isLight
+                    ? '0 0 16px rgba(154, 118, 46, 0.18)'
+                    : '0 0 16px rgba(197, 160, 89, 0.18)'
+                  : 'none',
+                transition: 'background-color 0.25s ease, border-color 0.25s ease, box-shadow 0.25s ease',
+              }}
+            >
+              {/* Architectural corner '+' markers */}
+              <span aria-hidden="true" style={{ position: 'absolute', top: 5, left: 7, fontSize: 10, lineHeight: 1, color: goldColor, opacity: isArenaHovered ? 0.9 : 0.4, pointerEvents: 'none', fontFamily: 'monospace', userSelect: 'none', transition: 'opacity 0.2s ease' }}>+</span>
+              <span aria-hidden="true" style={{ position: 'absolute', top: 5, right: 7, fontSize: 10, lineHeight: 1, color: goldColor, opacity: isArenaHovered ? 0.9 : 0.4, pointerEvents: 'none', fontFamily: 'monospace', userSelect: 'none', transition: 'opacity 0.2s ease' }}>+</span>
+              <span aria-hidden="true" style={{ position: 'absolute', bottom: 5, left: 7, fontSize: 10, lineHeight: 1, color: goldColor, opacity: isArenaHovered ? 0.9 : 0.4, pointerEvents: 'none', fontFamily: 'monospace', userSelect: 'none', transition: 'opacity 0.2s ease' }}>+</span>
+              <span aria-hidden="true" style={{ position: 'absolute', bottom: 5, right: 7, fontSize: 10, lineHeight: 1, color: goldColor, opacity: isArenaHovered ? 0.9 : 0.4, pointerEvents: 'none', fontFamily: 'monospace', userSelect: 'none', transition: 'opacity 0.2s ease' }}>+</span>
+
+              <motion.div
+                animate={{ y: isArenaHovered ? -1 : 0 }}
+                transition={{ type: 'spring', stiffness: 400, damping: 25 }}
+                style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}
+              >
+                <span
+                  style={{
+                    fontFamily: "'JetBrains Mono', monospace",
+                    fontSize: '13px',
+                    fontWeight: 700,
+                    letterSpacing: '0.24em',
+                    textTransform: 'uppercase',
+                    color: goldColor,
+                    lineHeight: 1.2,
+                  }}
+                >
+                  02 · ARENA DUEL
+                </span>
+                <span
+                  style={{
+                    fontFamily: "'JetBrains Mono', monospace",
+                    fontSize: '11px',
+                    letterSpacing: '0.04em',
+                    color: isLight ? '#1E1C19' : '#FDFDFB',
+                    opacity: 0.60,
+                    marginTop: '6px',
+                    lineHeight: 1.2,
+                  }}
+                >
+                  Synchronized room [2–8 peers]
+                </span>
+              </motion.div>
+            </motion.button>
+          </div>
 
           {/* 6. Guide Cards: Staggered entrance, hover spring lift (y: -4px) & 100% Gold border brightening */}
           <motion.div

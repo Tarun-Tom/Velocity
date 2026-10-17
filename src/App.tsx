@@ -56,6 +56,7 @@ function App() {
 
   // ── Multiplayer Arena State ────────────────────────────────────────────────
   const [isMultiplayer, setIsMultiplayer] = useState<boolean>(false);
+  const [isMultiplayerHost, setIsMultiplayerHost] = useState<boolean>(false);
   const [multiplayerRoomCode, setMultiplayerRoomCode] = useState<string | null>(null);
   const [multiplayerCallsign, setMultiplayerCallsign] = useState<string>('');
   const [multiplayerChannel, setMultiplayerChannel] = useState<RealtimeChannel | null>(null);
@@ -187,9 +188,11 @@ function App() {
     timeLeft,
     currentWpm,
     isMultiplayer,
+    isMultiplayerHost,
     multiplayerCountdown,
     multiplayerCallsign,
     multiplayerChannel,
+    isPodiumOpen,
   });
 
   useEffect(() => {
@@ -211,11 +214,13 @@ function App() {
       timeLeft,
       currentWpm,
       isMultiplayer,
+      isMultiplayerHost,
       multiplayerCountdown,
       multiplayerCallsign,
       multiplayerChannel,
+      isPodiumOpen,
     };
-  }, [words, focusedWordId, mousePos, correctKeys, incorrectKeys, completedWordsCount, startTime, muted, lastCompletionTime, flowStreak, synergyPoints, gameMode, isPlaying, isGameOver, timeLeft, currentWpm, isMultiplayer, multiplayerCountdown, multiplayerCallsign, multiplayerChannel]);
+  }, [words, focusedWordId, mousePos, correctKeys, incorrectKeys, completedWordsCount, startTime, muted, lastCompletionTime, flowStreak, synergyPoints, gameMode, isPlaying, isGameOver, timeLeft, currentWpm, isMultiplayer, isMultiplayerHost, multiplayerCountdown, multiplayerCallsign, multiplayerChannel, isPodiumOpen]);
 
   // Load High Scores from LocalStorage on mount
   useEffect(() => {
@@ -525,7 +530,7 @@ function App() {
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       const current = stateRef.current;
-      if (!current.isPlaying || current.isGameOver || current.multiplayerCountdown !== null) return;
+      if (!current.isPlaying || current.isGameOver || current.isPodiumOpen || current.multiplayerCountdown !== null) return;
       if (e.key === 'Escape') {
         setFocusedWordId(null);
         return;
@@ -832,7 +837,7 @@ function App() {
 
   // ── Throttled Ghost Cursor Broadcaster (~30 FPS / 33ms) ───────────────────
   useEffect(() => {
-    if (!isPlaying || !isMultiplayer || !multiplayerChannel || multiplayerCountdown !== null) return;
+    if (!isPlaying || !isMultiplayer || !multiplayerChannel || multiplayerCountdown !== null || isPodiumOpen) return;
 
     const handlePointerMove = (e: MouseEvent) => {
       const now = Date.now();
@@ -854,11 +859,11 @@ function App() {
 
     window.addEventListener('mousemove', handlePointerMove, { passive: true });
     return () => window.removeEventListener('mousemove', handlePointerMove);
-  }, [isPlaying, isMultiplayer, multiplayerChannel, multiplayerCountdown, multiplayerCallsign]);
+  }, [isPlaying, isMultiplayer, multiplayerChannel, multiplayerCountdown, multiplayerCallsign, isPodiumOpen]);
 
   // ── Periodic Live Score Broadcast (WPM refresh every 500ms) ───────────────
   useEffect(() => {
-    if (!isPlaying || !isMultiplayer || !multiplayerChannel || multiplayerCountdown !== null) return;
+    if (!isPlaying || !isMultiplayer || !multiplayerChannel || multiplayerCountdown !== null || isPodiumOpen) return;
 
     const now = Date.now();
     if (now - lastScoreBroadcastRef.current >= 500) {
@@ -875,7 +880,7 @@ function App() {
         },
       });
     }
-  }, [isPlaying, isMultiplayer, multiplayerChannel, multiplayerCountdown, multiplayerCallsign, currentWpm, completedWordsCount, flowStreak, accuracy]);
+  }, [isPlaying, isMultiplayer, multiplayerChannel, multiplayerCountdown, multiplayerCallsign, currentWpm, completedWordsCount, flowStreak, accuracy, isPodiumOpen]);
 
   // ── Multiplayer Realtime Channel Broadcast Listeners ───────────────────────
   useEffect(() => {
@@ -922,7 +927,13 @@ function App() {
       }
     });
 
-    // 4. Return to Lobby Protocol
+    // 4. Return to Lobby Protocol (Host & Peer Sync)
+    multiplayerChannel.on('broadcast', { event: 'RESET_LOBBY' }, () => {
+      setIsPodiumOpen(false);
+      setIsPlaying(false);
+      setIsGameOver(false);
+      setIsMultiplayerOpen(true);
+    });
     multiplayerChannel.on('broadcast', { event: 'RETURN_LOBBY' }, () => {
       setIsPodiumOpen(false);
       setIsPlaying(false);
@@ -955,6 +966,7 @@ function App() {
   const handleMultiplayerLaunch = useCallback((payload: MultiplayerLaunchPayload) => {
     setIsMultiplayerOpen(false);
     setIsMultiplayer(true);
+    setIsMultiplayerHost(payload.hostCallsign === payload.callsign);
     setMultiplayerRoomCode(payload.roomCode);
     setMultiplayerCallsign(payload.callsign);
     setMultiplayerChannel(payload.channel);
@@ -1087,7 +1099,12 @@ function App() {
           />
 
           {/* Interactive Word Nodes Space */}
-          <div className="interactive-area">
+          <div 
+            className="interactive-area"
+            style={{
+              pointerEvents: isPlaying && !isGameOver && !isPodiumOpen ? 'auto' : 'none',
+            }}
+          >
             {isPlaying &&
               words.map(w => (
                 <WordNode
@@ -1272,11 +1289,13 @@ function App() {
               roomCode={multiplayerRoomCode || 'ARENA'}
               theme={theme}
               onReturnToLobby={() => {
-                if (multiplayerChannel) {
+                // Button 1: '[ RETURN_TO_LOBBY ]' (Host & Peer Sync)
+                // If the Host clicks it: broadcast RESET_LOBBY so all connected peers return together
+                if (isMultiplayerHost && multiplayerChannel) {
                   multiplayerChannel.send({
                     type: 'broadcast',
-                    event: 'RETURN_LOBBY',
-                    payload: {},
+                    event: 'RESET_LOBBY',
+                    payload: { roomCode: multiplayerRoomCode },
                   });
                 }
                 setIsPodiumOpen(false);
@@ -1285,6 +1304,8 @@ function App() {
                 setIsMultiplayerOpen(true);
               }}
               onExitArena={() => {
+                // Button 2: '[ LEAVE_ARENA ]' (Individual Exit)
+                // Unsubscribe / disconnect from the Supabase channel, reset all multiplayer state, and return directly to landing page
                 if (multiplayerChannel) {
                   multiplayerChannel.unsubscribe();
                   supabase.removeChannel(multiplayerChannel);
@@ -1294,6 +1315,7 @@ function App() {
                 setIsGameOver(false);
                 setIsPlaying(false);
                 setIsMultiplayer(false);
+                setIsMultiplayerHost(false);
                 setMultiplayerRoomCode(null);
                 setOpponentCursors({});
                 setOpponentScores({});

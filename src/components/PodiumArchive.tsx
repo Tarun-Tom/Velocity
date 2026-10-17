@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { Trophy, RotateCcw, Home } from 'lucide-react';
 
@@ -34,6 +34,22 @@ export const PodiumArchive: React.FC<PodiumArchiveProps> = ({
   const cardBg = isLight ? 'rgba(30, 28, 25, 0.03)' : 'rgba(253, 253, 251, 0.03)';
   const borderIdle = isLight ? 'rgba(154, 118, 46, 0.25)' : 'rgba(197, 160, 89, 0.25)';
 
+  // ── Keyboard Shortcut Fallback: Enter = RETURN TO LOBBY, Escape = LEAVE ARENA ─
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        onReturnToLobby();
+      } else if (e.key === 'Escape') {
+        e.preventDefault();
+        onExitArena();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [onReturnToLobby, onExitArena]);
+
   // Sort players by wordsCompleted descending, then WPM descending
   const sorted = [...players].sort((a, b) => {
     if (b.wordsCompleted !== a.wordsCompleted) {
@@ -55,10 +71,12 @@ export const PodiumArchive: React.FC<PodiumArchiveProps> = ({
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
+      className="relative z-[100] pointer-events-auto"
       style={{
         position: 'fixed',
         inset: 0,
-        zIndex: 85,
+        zIndex: 100,
+        pointerEvents: 'auto',
         backgroundColor: bgColor,
         overflowY: 'auto',
         display: 'flex',
@@ -394,6 +412,9 @@ export const PodiumArchive: React.FC<PodiumArchiveProps> = ({
             gap: 14,
             maxWidth: 540,
             margin: '0 auto',
+            position: 'relative',
+            zIndex: 110,
+            pointerEvents: 'auto',
           }}
         >
           {/* RETURN TO LOBBY */}
@@ -401,7 +422,12 @@ export const PodiumArchive: React.FC<PodiumArchiveProps> = ({
             whileHover={{ scale: 1.01 }}
             whileTap={{ scale: 0.98 }}
             onClick={onReturnToLobby}
+            className="relative z-[110] cursor-pointer pointer-events-auto"
             style={{
+              position: 'relative',
+              zIndex: 110,
+              cursor: 'pointer',
+              pointerEvents: 'auto',
               background: goldColor,
               color: isLight ? '#FAF7F2' : '#000000',
               border: `1px solid ${goldColor}`,
@@ -412,7 +438,6 @@ export const PodiumArchive: React.FC<PodiumArchiveProps> = ({
               fontWeight: 700,
               letterSpacing: '0.12em',
               textTransform: 'uppercase',
-              cursor: 'pointer',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
@@ -424,12 +449,17 @@ export const PodiumArchive: React.FC<PodiumArchiveProps> = ({
             [ RETURN_TO_LOBBY ]
           </motion.button>
 
-          {/* EXIT ARENA */}
+          {/* LEAVE ARENA */}
           <motion.button
             whileHover={{ scale: 1.01 }}
             whileTap={{ scale: 0.98 }}
             onClick={onExitArena}
+            className="relative z-[110] cursor-pointer pointer-events-auto"
             style={{
+              position: 'relative',
+              zIndex: 110,
+              cursor: 'pointer',
+              pointerEvents: 'auto',
               background: 'transparent',
               color: textColor,
               border: `1px solid ${borderIdle}`,
@@ -440,7 +470,6 @@ export const PodiumArchive: React.FC<PodiumArchiveProps> = ({
               fontWeight: 600,
               letterSpacing: '0.12em',
               textTransform: 'uppercase',
-              cursor: 'pointer',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
@@ -448,8 +477,24 @@ export const PodiumArchive: React.FC<PodiumArchiveProps> = ({
             }}
           >
             <Home size={14} />
-            [ EXIT_ARENA ]
+            [ LEAVE_ARENA ]
           </motion.button>
+        </div>
+
+        {/* Technical Keyboard Shortcut Hint */}
+        <div
+          style={{
+            textAlign: 'center',
+            marginTop: 16,
+            fontFamily: "'JetBrains Mono', monospace",
+            fontSize: 10,
+            letterSpacing: '0.15em',
+            color: subtextColor,
+            opacity: 0.7,
+            pointerEvents: 'none',
+          }}
+        >
+          [ ENTER ── RETURN TO LOBBY ] · [ ESC ── LEAVE ARENA ]
         </div>
       </div>
     </motion.div>

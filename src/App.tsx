@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { BackgroundGrid } from './components/BackgroundGrid';
 import { WordNode } from './components/WordNode';
 import { VelocityButton } from './components/VelocityButton';
@@ -11,7 +11,14 @@ import { audioController } from './utils/audio';
 import { Volume2, VolumeX, Moon, Sun, RotateCcw } from 'lucide-react';
 import { useMouseMove } from './hooks/useMouseMove';
 import { AnimatePresence } from 'framer-motion';
-import { MultiplayerLobby } from './components/MultiplayerLobby';
+import { MultiplayerLobby, type PlayerPresence, type MultiplayerLaunchPayload } from './components/MultiplayerLobby';
+import { MultiplayerCountdown } from './components/MultiplayerCountdown';
+import { GhostCursors, type OpponentCursor } from './components/GhostCursors';
+import { MultiplayerRaceRibbon, type PlayerScoreState } from './components/MultiplayerRaceRibbon';
+import { PodiumArchive, type PodiumPlayer } from './components/PodiumArchive';
+import { mulberry32, seededShuffle } from './utils/prng';
+import { supabase } from './lib/supabase';
+import type { RealtimeChannel } from '@supabase/supabase-js';
 import './App.css';
 import { DESIGN_DICTIONARY, shuffleArray } from './constants/words';
 
@@ -46,6 +53,22 @@ function App() {
   const [showLeaderboard, setShowLeaderboard] = useState(false);
   const [muted, setMuted] = useState(false);
   const [isMultiplayerOpen, setIsMultiplayerOpen] = useState(false);
+
+  // ── Multiplayer Arena State ────────────────────────────────────────────────
+  const [isMultiplayer, setIsMultiplayer] = useState<boolean>(false);
+  const [multiplayerRoomCode, setMultiplayerRoomCode] = useState<string | null>(null);
+  const [multiplayerCallsign, setMultiplayerCallsign] = useState<string>('');
+  const [multiplayerChannel, setMultiplayerChannel] = useState<RealtimeChannel | null>(null);
+  const [multiplayerPlayers, setMultiplayerPlayers] = useState<PlayerPresence[]>([]);
+  const [multiplayerCountdown, setMultiplayerCountdown] = useState<number | null>(null);
+  const [opponentCursors, setOpponentCursors] = useState<Record<string, OpponentCursor>>({});
+  const [opponentScores, setOpponentScores] = useState<Record<string, PlayerScoreState>>({});
+  const [opponentFinishResults, setOpponentFinishResults] = useState<Record<string, any>>({});
+  const [isPodiumOpen, setIsPodiumOpen] = useState<boolean>(false);
+
+  const prngRef = useRef<(() => number) | null>(null);
+  const lastCursorBroadcastRef = useRef<number>(0);
+  const lastScoreBroadcastRef = useRef<number>(0);
 
   const [isMobile, setIsMobile] = useState<boolean>(() => {
     if (typeof window !== 'undefined') {
@@ -162,7 +185,11 @@ function App() {
     isPlaying,
     isGameOver,
     timeLeft,
-    currentWpm
+    currentWpm,
+    isMultiplayer,
+    multiplayerCountdown,
+    multiplayerCallsign,
+    multiplayerChannel,
   });
 
   useEffect(() => {
@@ -182,9 +209,13 @@ function App() {
       isPlaying,
       isGameOver,
       timeLeft,
-      currentWpm
+      currentWpm,
+      isMultiplayer,
+      multiplayerCountdown,
+      multiplayerCallsign,
+      multiplayerChannel,
     };
-  }, [words, focusedWordId, mousePos, correctKeys, incorrectKeys, completedWordsCount, startTime, muted, lastCompletionTime, flowStreak, synergyPoints, gameMode, isPlaying, isGameOver, timeLeft, currentWpm]);
+  }, [words, focusedWordId, mousePos, correctKeys, incorrectKeys, completedWordsCount, startTime, muted, lastCompletionTime, flowStreak, synergyPoints, gameMode, isPlaying, isGameOver, timeLeft, currentWpm, isMultiplayer, multiplayerCountdown, multiplayerCallsign, multiplayerChannel]);
 
   // Load High Scores from LocalStorage on mount
   useEffect(() => {
@@ -249,7 +280,7 @@ function App() {
 
   // Game Loop for Timer
   useEffect(() => {
-    if (!isPlaying || isGameOver) return;
+    if (!isPlaying || isGameOver || multiplayerCountdown !== null) return;
     
     const interval = setInterval(() => {
       if (gameMode === 'Chrono' || gameMode === 'Overdrive') {
@@ -265,7 +296,7 @@ function App() {
     }, 1000);
 
     return () => clearInterval(interval);
-  }, [isPlaying, isGameOver, gameMode]);
+  }, [isPlaying, isGameOver, gameMode, multiplayerCountdown]);
 
   const triggerGameOver = () => {
     setIsGameOver(true);
@@ -276,6 +307,23 @@ function App() {
     if (momentumDecayRef.current) clearInterval(momentumDecayRef.current);
     if (momentumAnimRef.current) cancelAnimationFrame(momentumAnimRef.current);
     if (momentumBarRef.current) momentumBarRef.current.style.width = '0%';
+
+    const current = stateRef.current;
+    if (current.isMultiplayer && current.multiplayerChannel) {
+      const finalStats = {
+        callsign: current.multiplayerCallsign,
+        finalWpm: current.currentWpm,
+        finalAccuracy: accuracy,
+        wordsCompleted: current.completedWordsCount,
+        finalScore: score,
+      };
+      current.multiplayerChannel.send({
+        type: 'broadcast',
+        event: 'MATCH_FINISH',
+        payload: finalStats,
+      });
+      setIsPodiumOpen(true);
+    }
   };
 
   // Proximity checker helper (synchronized 180px radius)
@@ -325,15 +373,20 @@ function App() {
       maxY = h - paddingY;
     }
     
+    const rng1 = prngRef.current ? prngRef.current() : Math.random();
+    const rng2 = prngRef.current ? prngRef.current() : Math.random();
+
     return {
-      x: minX + Math.random() * (maxX - minX),
-      y: minY + Math.random() * (maxY - minY),
+      x: minX + rng1 * (maxX - minX),
+      y: minY + rng2 * (maxY - minY),
     };
   }, []);
 
   const getNextWordFromPool = useCallback((): string => {
     if (wordsPoolRef.current.length === 0) {
-      const freshPool = shuffleArray([...DESIGN_DICTIONARY]);
+      const freshPool = prngRef.current
+        ? seededShuffle(DESIGN_DICTIONARY, prngRef.current)
+        : shuffleArray([...DESIGN_DICTIONARY]);
       wordsPoolRef.current = freshPool;
       setWordsPool(freshPool);
     }
@@ -377,7 +430,8 @@ function App() {
       if (forceQuadrant !== undefined) {
         pos = getPositionInQuadrant(forceQuadrant);
       } else {
-        const randQuad = Math.floor(Math.random() * 4) + 1;
+        const rng = prngRef.current ? prngRef.current() : Math.random();
+        const randQuad = Math.floor(rng * 4) + 1;
         pos = getPositionInQuadrant(randQuad);
       }
 
@@ -385,11 +439,15 @@ function App() {
       spawnAttempts++;
     }
 
+    const rngSuffix = prngRef.current
+      ? Math.floor(prngRef.current() * 100000).toString(36)
+      : Math.random().toString(36).substring(2, 7);
+
     // Stable ID: epoch-ms prefix ensures uniqueness across sessions;
     // the word text is embedded so the key never changes for the same word
     // during a mono→serif transition (the WordNode key is the word's id from App state).
     return {
-      id: `${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+      id: `${Date.now()}-${rngSuffix}`,
       word: randomWord,
       x: pos.x,
       y: pos.y,
@@ -401,8 +459,14 @@ function App() {
   }, [getPositionInQuadrant, isTooClose, getNextWordFromPool]);
 
   // Initialize game session
-  const initializeGame = () => {
-    if (wordsPoolRef.current.length === 0) {
+  const initializeGame = (seed?: number) => {
+    if (seed !== undefined) {
+      prngRef.current = mulberry32(seed);
+      const freshPool = seededShuffle(DESIGN_DICTIONARY, prngRef.current);
+      wordsPoolRef.current = [...freshPool];
+      setWordsPool([...freshPool]);
+    } else {
+      prngRef.current = null;
       const freshPool = shuffleArray([...DESIGN_DICTIONARY]);
       wordsPoolRef.current = freshPool;
       setWordsPool(freshPool);
@@ -461,7 +525,7 @@ function App() {
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       const current = stateRef.current;
-      if (!current.isPlaying || current.isGameOver) return;
+      if (!current.isPlaying || current.isGameOver || current.multiplayerCountdown !== null) return;
       if (e.key === 'Escape') {
         setFocusedWordId(null);
         return;
@@ -485,7 +549,25 @@ function App() {
             if (nextLength === targetWord.word.length) {
               // ── Word completed ───────────────────────────────────────────
               if (!current.muted) audioController.playThud();
-              setCompletedWordsCount(prev => prev + 1);
+              const nextCompletedCount = current.completedWordsCount + 1;
+              setCompletedWordsCount(nextCompletedCount);
+
+              // Realtime Multiplayer Score Broadcast on word completion
+              if (current.isMultiplayer && current.multiplayerChannel) {
+                const totalKeysNow = current.correctKeys + 1 + current.incorrectKeys;
+                const accNow = totalKeysNow > 0 ? Math.round(((current.correctKeys + 1) / totalKeysNow) * 100) : 100;
+                current.multiplayerChannel.send({
+                  type: 'broadcast',
+                  event: 'SCORE_UPDATE',
+                  payload: {
+                    callsign: current.multiplayerCallsign,
+                    completedCount: nextCompletedCount,
+                    wpm: current.currentWpm,
+                    streak: current.flowStreak,
+                    accuracy: accNow,
+                  },
+                });
+              }
 
               const completedAt = Date.now();
               setLastCompletionTime(completedAt);
@@ -748,6 +830,213 @@ function App() {
     return [];
   };
 
+  // ── Throttled Ghost Cursor Broadcaster (~30 FPS / 33ms) ───────────────────
+  useEffect(() => {
+    if (!isPlaying || !isMultiplayer || !multiplayerChannel || multiplayerCountdown !== null) return;
+
+    const handlePointerMove = (e: MouseEvent) => {
+      const now = Date.now();
+      if (now - lastCursorBroadcastRef.current >= 33) {
+        lastCursorBroadcastRef.current = now;
+        const xPct = Math.max(0, Math.min(1, e.clientX / window.innerWidth));
+        const yPct = Math.max(0, Math.min(1, e.clientY / window.innerHeight));
+        multiplayerChannel.send({
+          type: 'broadcast',
+          event: 'CURSOR_MOVE',
+          payload: {
+            callsign: multiplayerCallsign,
+            xPct,
+            yPct,
+          },
+        });
+      }
+    };
+
+    window.addEventListener('mousemove', handlePointerMove, { passive: true });
+    return () => window.removeEventListener('mousemove', handlePointerMove);
+  }, [isPlaying, isMultiplayer, multiplayerChannel, multiplayerCountdown, multiplayerCallsign]);
+
+  // ── Periodic Live Score Broadcast (WPM refresh every 500ms) ───────────────
+  useEffect(() => {
+    if (!isPlaying || !isMultiplayer || !multiplayerChannel || multiplayerCountdown !== null) return;
+
+    const now = Date.now();
+    if (now - lastScoreBroadcastRef.current >= 500) {
+      lastScoreBroadcastRef.current = now;
+      multiplayerChannel.send({
+        type: 'broadcast',
+        event: 'SCORE_UPDATE',
+        payload: {
+          callsign: multiplayerCallsign,
+          completedCount: completedWordsCount,
+          wpm: currentWpm,
+          streak: flowStreak,
+          accuracy,
+        },
+      });
+    }
+  }, [isPlaying, isMultiplayer, multiplayerChannel, multiplayerCountdown, multiplayerCallsign, currentWpm, completedWordsCount, flowStreak, accuracy]);
+
+  // ── Multiplayer Realtime Channel Broadcast Listeners ───────────────────────
+  useEffect(() => {
+    if (!multiplayerChannel) return;
+
+    // 1. Ghost Cursor Moves
+    multiplayerChannel.on('broadcast', { event: 'CURSOR_MOVE' }, ({ payload }) => {
+      if (payload && payload.callsign && payload.callsign !== multiplayerCallsign) {
+        setOpponentCursors((prev) => ({
+          ...prev,
+          [payload.callsign]: {
+            callsign: payload.callsign,
+            xPct: payload.xPct,
+            yPct: payload.yPct,
+            lastUpdate: Date.now(),
+          },
+        }));
+      }
+    });
+
+    // 2. Realtime Score Updates
+    multiplayerChannel.on('broadcast', { event: 'SCORE_UPDATE' }, ({ payload }) => {
+      if (payload && payload.callsign && payload.callsign !== multiplayerCallsign) {
+        setOpponentScores((prev) => ({
+          ...prev,
+          [payload.callsign]: {
+            callsign: payload.callsign,
+            completedCount: payload.completedCount,
+            wpm: payload.wpm,
+            streak: payload.streak,
+            accuracy: payload.accuracy,
+          },
+        }));
+      }
+    });
+
+    // 3. Match Completion Signals
+    multiplayerChannel.on('broadcast', { event: 'MATCH_FINISH' }, ({ payload }) => {
+      if (payload && payload.callsign) {
+        setOpponentFinishResults((prev) => ({
+          ...prev,
+          [payload.callsign]: payload,
+        }));
+      }
+    });
+
+    // 4. Return to Lobby Protocol
+    multiplayerChannel.on('broadcast', { event: 'RETURN_LOBBY' }, () => {
+      setIsPodiumOpen(false);
+      setIsPlaying(false);
+      setIsGameOver(false);
+      setIsMultiplayerOpen(true);
+    });
+  }, [multiplayerChannel, multiplayerCallsign]);
+
+  // ── Stale Ghost Cursors Cleanup ────────────────────────────────────────────
+  useEffect(() => {
+    if (!isMultiplayer || !isPlaying) return;
+    const interval = setInterval(() => {
+      const cutoff = Date.now() - 5000;
+      setOpponentCursors((prev) => {
+        let changed = false;
+        const next = { ...prev };
+        Object.keys(next).forEach((key) => {
+          if (next[key].lastUpdate < cutoff) {
+            delete next[key];
+            changed = true;
+          }
+        });
+        return changed ? next : prev;
+      });
+    }, 2000);
+    return () => clearInterval(interval);
+  }, [isMultiplayer, isPlaying]);
+
+  // ── Multiplayer Launch Handler ─────────────────────────────────────────────
+  const handleMultiplayerLaunch = useCallback((payload: MultiplayerLaunchPayload) => {
+    setIsMultiplayerOpen(false);
+    setIsMultiplayer(true);
+    setMultiplayerRoomCode(payload.roomCode);
+    setMultiplayerCallsign(payload.callsign);
+    setMultiplayerChannel(payload.channel);
+    setMultiplayerPlayers(payload.players);
+    setOpponentCursors({});
+    setOpponentScores({});
+    setOpponentFinishResults({});
+    setIsPodiumOpen(false);
+    setGameMode('Chrono');
+
+    // Deterministic seeding for identical words and coordinates!
+    initializeGame(payload.seed);
+
+    // 3-Second Synchronized Countdown
+    setMultiplayerCountdown(3);
+    if (!muted) audioController.playClick();
+
+    let count = 3;
+    const timer = setInterval(() => {
+      count -= 1;
+      if (count > 0) {
+        setMultiplayerCountdown(count);
+        if (!muted) audioController.playClick();
+      } else if (count === 0) {
+        setMultiplayerCountdown(0); // "ENGAGE"
+        if (!muted) audioController.playThud();
+      } else {
+        clearInterval(timer);
+        setMultiplayerCountdown(null);
+      }
+    }, 1000);
+  }, [muted]);
+
+  // ── Podium Players Roster Memo ─────────────────────────────────────────────
+  const podiumPlayersList: PodiumPlayer[] = useMemo(() => {
+    const localPlayer: PodiumPlayer = {
+      callsign: multiplayerCallsign || 'YOU',
+      wpm: currentWpm,
+      accuracy,
+      wordsCompleted: completedWordsCount,
+      score,
+      isLocal: true,
+    };
+
+    const opponentList: PodiumPlayer[] = Object.keys(opponentScores).map((oppTag) => {
+      const finish = opponentFinishResults[oppTag];
+      const scoreState = opponentScores[oppTag];
+      return {
+        callsign: oppTag,
+        wpm: finish?.finalWpm ?? scoreState?.wpm ?? 0,
+        accuracy: finish?.finalAccuracy ?? scoreState?.accuracy ?? 100,
+        wordsCompleted: finish?.wordsCompleted ?? scoreState?.completedCount ?? 0,
+        score: finish?.finalScore ?? (scoreState?.completedCount ?? 0) * 100,
+        isLocal: false,
+      };
+    });
+
+    multiplayerPlayers.forEach((p) => {
+      if (p.callsign !== multiplayerCallsign && !opponentList.some((o) => o.callsign === p.callsign)) {
+        opponentList.push({
+          callsign: p.callsign,
+          wpm: 0,
+          accuracy: 100,
+          wordsCompleted: 0,
+          score: 0,
+          isLocal: false,
+        });
+      }
+    });
+
+    return [localPlayer, ...opponentList];
+  }, [
+    multiplayerCallsign,
+    currentWpm,
+    accuracy,
+    completedWordsCount,
+    score,
+    opponentScores,
+    opponentFinishResults,
+    multiplayerPlayers,
+  ]);
+
   // Parallax layers
   const windowCenterX = window.innerWidth / 2;
   const windowCenterY = window.innerHeight / 2;
@@ -839,12 +1128,14 @@ function App() {
                 >
                   {theme === 'light' ? <Moon size={14} /> : <Sun size={14} />}
                 </VelocityButton>
-                <VelocityButton
-                  onClick={initializeGame}
-                  ariaLabel="Reset Game"
-                >
-                  <RotateCcw size={14} />
-                </VelocityButton>
+                {!isMultiplayer && (
+                  <VelocityButton
+                    onClick={() => initializeGame()}
+                    ariaLabel="Reset Game"
+                  >
+                    <RotateCcw size={14} />
+                  </VelocityButton>
+                )}
                 <VelocityButton
                   onClick={triggerGameOver}
                   ariaLabel="Quit Game"
@@ -920,8 +1211,31 @@ function App() {
             </div>
           )}
 
+          {/* REALTIME MULTIPLAYER RACE HUD RIBBON */}
+          {isPlaying && isMultiplayer && (
+            <MultiplayerRaceRibbon
+              localCallsign={multiplayerCallsign || 'YOU'}
+              localWpm={currentWpm}
+              localCompletedCount={completedWordsCount}
+              localStreak={flowStreak}
+              localAccuracy={accuracy}
+              opponentScores={opponentScores}
+              theme={theme}
+              roomCode={multiplayerRoomCode || 'ARENA'}
+              timeLeft={timeLeft}
+            />
+          )}
+
+          {/* REALTIME MULTIPLAYER GHOST CURSORS */}
+          {isPlaying && isMultiplayer && (
+            <GhostCursors cursors={opponentCursors} theme={theme} />
+          )}
+
+          {/* SYNCHRONIZED COUNTDOWN OVERLAY */}
+          <MultiplayerCountdown countdown={multiplayerCountdown} theme={theme} />
+
           {/* 1. ASYMMETRIC BENTO HUB (START / HUB SCREEN OVERLAY) */}
-          {!isPlaying && !isGameOver && (
+          {!isPlaying && !isGameOver && !isPodiumOpen && (
             <BentoHub
               theme={theme}
               setTheme={setTheme}
@@ -934,7 +1248,7 @@ function App() {
               scores={scores}
               getLeaderboardData={getLeaderboardData}
               mousePos={mousePos}
-              onBeginSession={initializeGame}
+              onBeginSession={() => initializeGame()}
               onOpenMultiplayer={() => setIsMultiplayerOpen(true)}
             />
           )}
@@ -944,18 +1258,54 @@ function App() {
             {isMultiplayerOpen && (
               <MultiplayerLobby
                 theme={theme}
+                initialRoomCode={multiplayerRoomCode || undefined}
                 onClose={() => setIsMultiplayerOpen(false)}
-                onLaunchGame={(payload) => {
-                  console.log('[MULTIPLAYER GAME LAUNCH PROTOCOL]', payload);
-                  setIsMultiplayerOpen(false);
-                  initializeGame();
-                }}
+                onLaunchGame={handleMultiplayerLaunch}
               />
             )}
           </AnimatePresence>
 
-          {/* 4. THE SESSION ARCHIVE (SCORE SCREEN UPON GAME COMPLETION) */}
-          {isGameOver && (
+          {/* MULTIPLAYER PODIUM ARCHIVE (MATCH COMPLETION) */}
+          {isPodiumOpen && (
+            <PodiumArchive
+              players={podiumPlayersList}
+              roomCode={multiplayerRoomCode || 'ARENA'}
+              theme={theme}
+              onReturnToLobby={() => {
+                if (multiplayerChannel) {
+                  multiplayerChannel.send({
+                    type: 'broadcast',
+                    event: 'RETURN_LOBBY',
+                    payload: {},
+                  });
+                }
+                setIsPodiumOpen(false);
+                setIsGameOver(false);
+                setIsPlaying(false);
+                setIsMultiplayerOpen(true);
+              }}
+              onExitArena={() => {
+                if (multiplayerChannel) {
+                  multiplayerChannel.unsubscribe();
+                  supabase.removeChannel(multiplayerChannel);
+                  setMultiplayerChannel(null);
+                }
+                setIsPodiumOpen(false);
+                setIsGameOver(false);
+                setIsPlaying(false);
+                setIsMultiplayer(false);
+                setMultiplayerRoomCode(null);
+                setOpponentCursors({});
+                setOpponentScores({});
+                setOpponentFinishResults({});
+                setWords([]);
+                setFocusedWordId(null);
+              }}
+            />
+          )}
+
+          {/* 4. THE SESSION ARCHIVE (SINGLEPLAYER SCORE SCREEN UPON GAME COMPLETION) */}
+          {isGameOver && !isMultiplayer && (
             <SessionArchive
               score={score}
               wpm={currentWpm}
@@ -967,7 +1317,7 @@ function App() {
               synergyPoints={synergyPoints}
               gameMode={gameMode}
               mousePath={mousePathRef.current}
-              onRecalibrate={initializeGame}
+              onRecalibrate={() => initializeGame()}
               onReturnToNucleus={() => {
                 setIsGameOver(false);
                 setIsPlaying(false);
@@ -992,7 +1342,6 @@ function App() {
                 if (momentumDecayRef.current) clearInterval(momentumDecayRef.current);
                 if (momentumAnimRef.current) cancelAnimationFrame(momentumAnimRef.current);
                 if (momentumBarRef.current) momentumBarRef.current.style.width = '0%';
-                keystrokesTimeline.current = [];
                 keystrokesTimeline.current = [];
                 mousePathRef.current = [];
               }}

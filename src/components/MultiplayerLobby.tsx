@@ -4,17 +4,27 @@ import { supabase, isSupabaseConfigured } from '../lib/supabase';
 import type { RealtimeChannel } from '@supabase/supabase-js';
 import { X, Copy, Check, Users, Radio, Shield } from 'lucide-react';
 
-interface PlayerPresence {
+export interface PlayerPresence {
   callsign: string;
   isHost: boolean;
   joinedAt: number;
   status: string;
 }
 
+export interface MultiplayerLaunchPayload {
+  seed: number;
+  hostCallsign: string;
+  roomCode: string;
+  channel: RealtimeChannel;
+  callsign: string;
+  players: PlayerPresence[];
+}
+
 interface MultiplayerLobbyProps {
   theme: 'light' | 'dark';
   onClose: () => void;
-  onLaunchGame?: (payload: { seed: number; hostCallsign: string; roomCode: string }) => void;
+  onLaunchGame?: (payload: MultiplayerLaunchPayload) => void;
+  initialRoomCode?: string;
 }
 
 // ── Telemetry Corner Markers ───────────────────────────────────────────────────
@@ -31,6 +41,7 @@ export const MultiplayerLobby: React.FC<MultiplayerLobbyProps> = ({
   theme,
   onClose,
   onLaunchGame,
+  initialRoomCode,
 }) => {
   const isLight = theme === 'light';
   const goldColor = isLight ? '#9A762E' : '#C5A059';
@@ -59,7 +70,7 @@ export const MultiplayerLobby: React.FC<MultiplayerLobbyProps> = ({
   };
 
   // ── Room & Realtime Presence State ─────────────────────────────────────────
-  const [roomCode, setRoomCode] = useState<string>('');
+  const [roomCode, setRoomCode] = useState<string>(initialRoomCode || '');
   const [inputRoomCode, setInputRoomCode] = useState<string>('');
   const [isHost, setIsHost] = useState<boolean>(false);
   const [isConnected, setIsConnected] = useState<boolean>(false);
@@ -69,6 +80,8 @@ export const MultiplayerLobby: React.FC<MultiplayerLobbyProps> = ({
   const [copied, setCopied] = useState<boolean>(false);
 
   const channelRef = useRef<RealtimeChannel | null>(null);
+  const isHandingOverRef = useRef<boolean>(false);
+  const currentPlayersRef = useRef<PlayerPresence[]>([]);
 
   // Clean disconnect
   const disconnectChannel = useCallback(() => {
@@ -82,6 +95,7 @@ export const MultiplayerLobby: React.FC<MultiplayerLobbyProps> = ({
     setIsHost(false);
     setRoomCode('');
     setPlayers([]);
+    currentPlayersRef.current = [];
   }, []);
 
   // Listen for Escape key to exit modal safely
@@ -96,10 +110,12 @@ export const MultiplayerLobby: React.FC<MultiplayerLobbyProps> = ({
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [disconnectChannel, onClose]);
 
-  // Cleanup channel on unmount
+  // Cleanup channel on unmount only if not handing over to gameplay
   useEffect(() => {
     return () => {
-      disconnectChannel();
+      if (!isHandingOverRef.current) {
+        disconnectChannel();
+      }
     };
   }, [disconnectChannel]);
 
@@ -155,6 +171,7 @@ export const MultiplayerLobby: React.FC<MultiplayerLobbyProps> = ({
         // Sort by joinedAt so host / early peers appear first
         roster.sort((a, b) => a.joinedAt - b.joinedAt);
         setPlayers(roster);
+        currentPlayersRef.current = roster;
       })
       .on('presence', { event: 'join' }, ({ key, newPresences }) => {
         console.log('[ARENA PRESENCE: JOIN]', key, newPresences);
@@ -165,11 +182,15 @@ export const MultiplayerLobby: React.FC<MultiplayerLobbyProps> = ({
       // Broadcast: Game start listener
       .on('broadcast', { event: 'GAME_START' }, ({ payload }) => {
         console.log('[ARENA BROADCAST: GAME_START]', payload);
-        if (onLaunchGame) {
+        if (onLaunchGame && channelRef.current) {
+          isHandingOverRef.current = true;
           onLaunchGame({
             seed: payload.seed,
             hostCallsign: payload.hostCallsign,
             roomCode: formattedCode,
+            channel: channelRef.current,
+            callsign: effectiveTag,
+            players: currentPlayersRef.current.length > 0 ? currentPlayersRef.current : [{ callsign: effectiveTag, isHost: hosting, joinedAt: Date.now(), status: 'SYNCHRONIZED' }],
           });
         }
       })
@@ -194,6 +215,13 @@ export const MultiplayerLobby: React.FC<MultiplayerLobbyProps> = ({
         }
       });
   }, [callsign, onLaunchGame]);
+
+  // If initialRoomCode was passed (e.g. returning to lobby after match), auto-connect
+  useEffect(() => {
+    if (initialRoomCode && !isConnected && !isConnecting && !channelRef.current) {
+      connectToRoom(initialRoomCode, false);
+    }
+  }, [initialRoomCode, isConnected, isConnecting, connectToRoom]);
 
   // ── Host Room Flow ─────────────────────────────────────────────────────────
   const handleHostRoom = () => {
@@ -228,7 +256,15 @@ export const MultiplayerLobby: React.FC<MultiplayerLobbyProps> = ({
     });
 
     if (onLaunchGame) {
-      onLaunchGame({ seed, hostCallsign: callsign, roomCode });
+      isHandingOverRef.current = true;
+      onLaunchGame({
+        seed,
+        hostCallsign: callsign,
+        roomCode,
+        channel: channelRef.current,
+        callsign,
+        players: currentPlayersRef.current.length > 0 ? currentPlayersRef.current : [{ callsign, isHost: true, joinedAt: Date.now(), status: 'SYNCHRONIZED' }],
+      });
     }
   };
 

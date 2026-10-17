@@ -503,11 +503,14 @@ function App() {
       ? Math.floor(prngRef.current() * 100000).toString(36)
       : Math.random().toString(36).substring(2, 7);
 
-    // Stable ID: epoch-ms prefix ensures uniqueness across sessions;
-    // the word text is embedded so the key never changes for the same word
-    // during a mono→serif transition (the WordNode key is the word's id from App state).
+    // Stable ID: epoch-ms prefix ensures uniqueness across solo sessions;
+    // when deterministic seed is present, use PRNG-derived ID so host and peers start identical.
+    const generatedId = prngRef.current
+      ? `word-${randomWord.toLowerCase()}-${rngSuffix}`
+      : `word-${Date.now()}-${rngSuffix}`;
+
     return {
-      id: `${Date.now()}-${rngSuffix}`,
+      id: generatedId,
       word: randomWord,
       x: pos.x,
       y: pos.y,
@@ -716,6 +719,7 @@ function App() {
                   event: 'WORD_SNATCHED',
                   payload: {
                     wordId: targetWord.id,
+                    wordText: targetWord.word,
                     winnerCallsign: current.multiplayerCallsign,
                     newWord: newWordPayload,
                   },
@@ -734,7 +738,13 @@ function App() {
                 });
               }
 
-              setWords([...updatedWords, nextWord]);
+              // Optimistic local removal + new word injection using functional state
+              setWords(prevWords => {
+                const filtered = prevWords.filter(
+                  w => w.id !== targetWord.id && w.word.toLowerCase() !== targetWord.word.toLowerCase()
+                );
+                return [...filtered, nextWord];
+              });
               setFocusedWordId(null);
             } else {
               setWords(prev =>
@@ -1069,7 +1079,7 @@ function App() {
     // Initialize game with deterministic seed & scaled word count
     const initialBoard = initializeGame(payload.seed, activeWordCount);
 
-    // If Host, broadcast BOARD_SYNC to all clients
+    // If Host, broadcast BOARD_SYNC to all clients (with redundant bursts during countdown to overcome mounting latency)
     if (isHost && payload.channel) {
       const serialized = initialBoard.map(w => ({
         id: w.id,
@@ -1081,11 +1091,21 @@ function App() {
         yPct: Number((w.y / (window.innerHeight || 1080)).toFixed(4)),
       }));
 
-      payload.channel.send({
-        type: 'broadcast',
-        event: 'BOARD_SYNC',
-        payload: { words: serialized },
-      });
+      const broadcastBoardSync = () => {
+        try {
+          payload.channel.send({
+            type: 'broadcast',
+            event: 'BOARD_SYNC',
+            payload: { words: serialized },
+          });
+        } catch (err) {
+          console.warn('[BOARD_SYNC BROADCAST WARN]', err);
+        }
+      };
+
+      broadcastBoardSync();
+      setTimeout(broadcastBoardSync, 200);
+      setTimeout(broadcastBoardSync, 600);
     }
 
     // 3-Second Synchronized Countdown
@@ -1129,8 +1149,9 @@ function App() {
     // 0b. Shared Dynamic Board Sync (Host ground truth)
     multiplayerChannel.on('broadcast', { event: 'BOARD_SYNC' }, ({ payload }) => {
       if (payload && Array.isArray(payload.words) && payload.words.length > 0) {
+        console.log('[BOARD_SYNC_RECEIVED]', payload.words);
         const syncedWords: WordItem[] = payload.words.map((w: any) => ({
-          id: w.id,
+          id: w.id || `word-${w.word || w.text}-${Math.random().toString(36).substring(2, 7)}`,
           word: w.word || w.text,
           x: w.xPct ? Math.round(w.xPct * (window.innerWidth || 1920)) : w.x,
           y: w.yPct ? Math.round(w.yPct * (window.innerHeight || 1080)) : w.y,
@@ -1145,14 +1166,24 @@ function App() {
 
     // 0c. Realtime Stolen Word Snatch Protocol
     multiplayerChannel.on('broadcast', { event: 'WORD_SNATCHED' }, ({ payload }) => {
-      if (!payload || !payload.wordId) return;
+      if (!payload || (!payload.wordId && !payload.wordText && !payload.text)) return;
+      console.log('[WORD_SNATCHED_RECEIVED]', payload);
 
       const current = stateRef.current;
       // If we are the winner, we already handled it locally
-      if (payload.winnerCallsign === current.multiplayerCallsign) return;
+      if (payload.winnerCallsign && payload.winnerCallsign === current.multiplayerCallsign) return;
 
-      // 1. If actively typing this exact word, immediately interrupt and release focus
-      if (current.focusedWordId === payload.wordId) {
+      const targetText = (payload.wordText || payload.text || '').toLowerCase();
+      const targetId = payload.wordId;
+
+      // 1. If actively typing this exact word (matching either ID or text), immediately interrupt and release focus
+      const focusedWord = current.words.find(w => w.id === current.focusedWordId);
+      const isTargetFocused = Boolean(
+        (targetId && current.focusedWordId === targetId) ||
+        (focusedWord && targetText && focusedWord.word.toLowerCase() === targetText)
+      );
+
+      if (isTargetFocused) {
         setFocusedWordId(null);
         if (!current.muted) audioController.playClick();
         setSnatchedAlert({
@@ -1164,39 +1195,44 @@ function App() {
         if (snatchedAlertTimeoutRef.current) clearTimeout(snatchedAlertTimeoutRef.current);
         snatchedAlertTimeoutRef.current = setTimeout(() => {
           setSnatchedAlert(null);
-        }, 1000);
+        }, 1200);
       }
 
       // 2. Trigger particle burst / implosion at the snatched word's location
-      const snatchedWord = current.words.find(w => w.id === payload.wordId);
+      const snatchedWord = current.words.find(
+        w => (targetId && w.id === targetId) || (targetText && w.word.toLowerCase() === targetText)
+      );
       if (snatchedWord) {
         setImplosion({ x: snatchedWord.x, y: snatchedWord.y, time: Date.now() });
       }
 
-      // 3. Remove stolen word and insert replacement word
-      if (payload.newWord) {
-        const nw = payload.newWord;
-        const normalizedNewWord: WordItem = {
-          id: nw.id,
-          word: nw.word || nw.text,
-          x: nw.xPct ? Math.round(nw.xPct * (window.innerWidth || 1920)) : nw.x,
-          y: nw.yPct ? Math.round(nw.yPct * (window.innerHeight || 1080)) : nw.y,
-          typedLength: 0,
-          completed: false,
-          scale: 0.95,
-          spawnTime: Date.now(),
-        };
+      // 3. Remove stolen word and insert replacement word using dual ID and text matching
+      const normalizedNewWord: WordItem | null = payload.newWord ? {
+        id: payload.newWord.id || `word-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+        word: payload.newWord.word || payload.newWord.text,
+        x: payload.newWord.xPct ? Math.round(payload.newWord.xPct * (window.innerWidth || 1920)) : (payload.newWord.x || 0),
+        y: payload.newWord.yPct ? Math.round(payload.newWord.yPct * (window.innerHeight || 1080)) : (payload.newWord.y || 0),
+        typedLength: 0,
+        completed: false,
+        scale: 0.95,
+        spawnTime: Date.now(),
+      } : null;
 
-        setWords(prev => {
-          const filtered = prev.filter(w => w.id !== payload.wordId);
-          if (filtered.some(w => w.id === normalizedNewWord.id)) {
+      setWords(prev => {
+        const filtered = prev.filter(w => {
+          const matchId = Boolean(targetId && w.id === targetId);
+          const matchText = Boolean(targetText && w.word.toLowerCase() === targetText);
+          return !matchId && !matchText;
+        });
+
+        if (normalizedNewWord) {
+          if (filtered.some(w => w.id === normalizedNewWord.id || w.word.toLowerCase() === normalizedNewWord.word.toLowerCase())) {
             return filtered;
           }
           return [...filtered, normalizedNewWord];
-        });
-      } else {
-        setWords(prev => prev.filter(w => w.id !== payload.wordId));
-      }
+        }
+        return filtered;
+      });
 
       // 4. Update the opponent's score live
       if (payload.winnerCallsign) {
@@ -1645,7 +1681,7 @@ function App() {
                       initial={{ opacity: 0, y: 0, scale: 0.96 }}
                       animate={{ opacity: [0, 1, 1, 0], y: -28, scale: 1 }}
                       exit={{ opacity: 0 }}
-                      transition={{ duration: 1.0, times: [0, 0.15, 0.75, 1.0], ease: 'easeOut' }}
+                      transition={{ duration: 1.2, times: [0, 0.15, 0.75, 1.0], ease: 'easeOut' }}
                       style={{
                         position: 'fixed',
                         left: snatchedAlert.x,

@@ -25,6 +25,7 @@ interface MultiplayerLobbyProps {
   onClose: () => void;
   onLaunchGame?: (payload: MultiplayerLaunchPayload) => void;
   initialRoomCode?: string;
+  initialCallsign?: string;
   existingChannel?: RealtimeChannel | null;
   existingPlayers?: PlayerPresence[];
   isHostUser?: boolean;
@@ -45,6 +46,7 @@ export const MultiplayerLobby: React.FC<MultiplayerLobbyProps> = ({
   onClose,
   onLaunchGame,
   initialRoomCode,
+  initialCallsign,
   existingChannel,
   existingPlayers,
   isHostUser,
@@ -59,6 +61,9 @@ export const MultiplayerLobby: React.FC<MultiplayerLobbyProps> = ({
 
   // ── Callsign State (Max 8 Alphanumeric, Saved to LocalStorage) ─────────────
   const [callsign, setCallsign] = useState<string>(() => {
+    if (initialCallsign && initialCallsign.trim()) {
+      return initialCallsign.trim().toUpperCase().slice(0, 8);
+    }
     if (typeof window !== 'undefined') {
       const saved = localStorage.getItem('velocity_callsign');
       if (saved && saved.trim()) return saved.trim().toUpperCase().slice(0, 8);
@@ -180,8 +185,17 @@ export const MultiplayerLobby: React.FC<MultiplayerLobbyProps> = ({
     if (initialRoomCode) setRoomCode(initialRoomCode);
     if (isHostUser !== undefined) setIsHost(isHostUser);
 
+    const safePresence = () => {
+      try {
+        return typeof existingChannel.presenceState === 'function' ? existingChannel.presenceState() : {};
+      } catch (err) {
+        console.warn('[LOBBY PRESENCE CHECK WARN]', err);
+        return {};
+      }
+    };
+
     // Initial safe sync from existing channel presence
-    const initialRoster = parsePresenceRoster(existingChannel.presenceState());
+    const initialRoster = parsePresenceRoster(safePresence());
     if (initialRoster.length > 0) {
       setPlayers(initialRoster);
       currentPlayersRef.current = initialRoster;
@@ -192,7 +206,7 @@ export const MultiplayerLobby: React.FC<MultiplayerLobbyProps> = ({
 
     existingChannel
       .on('presence', { event: 'sync' }, () => {
-        const roster = parsePresenceRoster(existingChannel.presenceState());
+        const roster = parsePresenceRoster(safePresence());
         if (roster.length > 0) {
           setPlayers(roster);
           currentPlayersRef.current = roster;

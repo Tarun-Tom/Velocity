@@ -15,6 +15,7 @@ import { MultiplayerCountdown } from './components/MultiplayerCountdown';
 import { GhostCursors, type OpponentCursor } from './components/GhostCursors';
 import { MultiplayerRaceRibbon, type PlayerScoreState } from './components/MultiplayerRaceRibbon';
 import { PodiumArchive, type PodiumPlayer } from './components/PodiumArchive';
+import { ErrorBoundary } from './components/ErrorBoundary';
 import { mulberry32, seededShuffle } from './utils/prng';
 import { supabase } from './lib/supabase';
 import type { RealtimeChannel } from '@supabase/supabase-js';
@@ -45,18 +46,29 @@ interface LeaderboardEntry {
 const BASE_SYNERGY_MS   = 500;
 const VELOCITY_CONSTANT = 1.1;  // px/ms — calibrated to a comfortable cursor speed
 
-export type MultiplayerPhase = 'lobby' | 'countdown' | 'playing' | 'podium';
+// ── Single Source of Truth View Router Enum ──────────────────────────────────
+export type AppView = 'landing' | 'solo-game' | 'solo-archive' | 'mp-lobby' | 'mp-game' | 'mp-podium';
 
 function App() {
   const [theme, setTheme] = useState<'light' | 'dark'>('dark');
-  const [isPlaying, setIsPlaying] = useState(false);
-  const [isGameOver, setIsGameOver] = useState(false);
   const [showLeaderboard, setShowLeaderboard] = useState(false);
   const [muted, setMuted] = useState(false);
 
-  // ── Multiplayer Arena State Machine ─────────────────────────────────────────
-  const [multiplayerPhase, setMultiplayerPhase] = useState<MultiplayerPhase>('lobby');
-  const [isMultiplayer, setIsMultiplayer] = useState<boolean>(false);
+  // ── Unified View State Machine (Default: 'landing') ─────────────────────────
+  const [currentView, setCurrentView] = useState<AppView>('landing');
+
+  // Diagnostic telemetry log on every view state change
+  useEffect(() => {
+    console.log('[VELOCITY_VIEW]', currentView);
+  }, [currentView]);
+
+  // Derived state flags for internal sub-system synchronization
+  const isPlaying = currentView === 'solo-game' || currentView === 'mp-game';
+  const isGameOver = currentView === 'solo-archive' || currentView === 'mp-podium';
+  const isMultiplayer = currentView === 'mp-lobby' || currentView === 'mp-game' || currentView === 'mp-podium';
+  const isPodiumOpen = currentView === 'mp-podium';
+
+  // ── Multiplayer Arena Session State ─────────────────────────────────────────
   const [isMultiplayerHost, setIsMultiplayerHost] = useState<boolean>(false);
   const [multiplayerRoomCode, setMultiplayerRoomCode] = useState<string | null>(null);
   const [multiplayerCallsign, setMultiplayerCallsign] = useState<string>('');
@@ -66,7 +78,6 @@ function App() {
   const [opponentCursors, setOpponentCursors] = useState<Record<string, OpponentCursor>>({});
   const [opponentScores, setOpponentScores] = useState<Record<string, PlayerScoreState>>({});
   const [opponentFinishResults, setOpponentFinishResults] = useState<Record<string, any>>({});
-  const [isPodiumOpen, setIsPodiumOpen] = useState<boolean>(false);
 
   const prngRef = useRef<(() => number) | null>(null);
   const lastCursorBroadcastRef = useRef<number>(0);
@@ -172,6 +183,7 @@ function App() {
 
   // Keep references to avoid re-binding keyboard listeners
   const stateRef = useRef({
+    currentView,
     words,
     focusedWordId,
     mousePos,
@@ -190,15 +202,16 @@ function App() {
     currentWpm,
     isMultiplayer,
     isMultiplayerHost,
-    multiplayerPhase,
     multiplayerCountdown,
     multiplayerCallsign,
     multiplayerChannel,
+    multiplayerRoomCode,
     isPodiumOpen,
   });
 
   useEffect(() => {
     stateRef.current = {
+      currentView,
       words,
       focusedWordId,
       mousePos,
@@ -217,13 +230,13 @@ function App() {
       currentWpm,
       isMultiplayer,
       isMultiplayerHost,
-      multiplayerPhase,
       multiplayerCountdown,
       multiplayerCallsign,
       multiplayerChannel,
+      multiplayerRoomCode,
       isPodiumOpen,
     };
-  }, [words, focusedWordId, mousePos, correctKeys, incorrectKeys, completedWordsCount, startTime, muted, lastCompletionTime, flowStreak, synergyPoints, gameMode, isPlaying, isGameOver, timeLeft, currentWpm, isMultiplayer, isMultiplayerHost, multiplayerPhase, multiplayerCountdown, multiplayerCallsign, multiplayerChannel, isPodiumOpen]);
+  }, [currentView, words, focusedWordId, mousePos, correctKeys, incorrectKeys, completedWordsCount, startTime, muted, lastCompletionTime, flowStreak, synergyPoints, gameMode, isPlaying, isGameOver, timeLeft, currentWpm, isMultiplayer, isMultiplayerHost, multiplayerCountdown, multiplayerCallsign, multiplayerChannel, multiplayerRoomCode, isPodiumOpen]);
 
   // Load High Scores from LocalStorage on mount
   useEffect(() => {
@@ -288,7 +301,7 @@ function App() {
 
   // Game Loop for Timer
   useEffect(() => {
-    if (!isPlaying || isGameOver || multiplayerCountdown !== null) return;
+    if ((currentView !== 'solo-game' && currentView !== 'mp-game') || multiplayerCountdown !== null) return;
     
     const interval = setInterval(() => {
       if (gameMode === 'Chrono' || gameMode === 'Overdrive') {
@@ -304,11 +317,9 @@ function App() {
     }, 1000);
 
     return () => clearInterval(interval);
-  }, [isPlaying, isGameOver, gameMode, multiplayerCountdown]);
+  }, [currentView, gameMode, multiplayerCountdown]);
 
   const triggerGameOver = () => {
-    setIsGameOver(true);
-    setIsPlaying(false);
     setFocusedWordId(null);
     // Kill any running momentum decay (both the grace-period timeout and the drip interval)
     if (momentumDecayTimeoutRef.current) clearTimeout(momentumDecayTimeoutRef.current);
@@ -317,21 +328,24 @@ function App() {
     if (momentumBarRef.current) momentumBarRef.current.style.width = '0%';
 
     const current = stateRef.current;
-    if (current.isMultiplayer && current.multiplayerChannel) {
-      const finalStats = {
-        callsign: current.multiplayerCallsign,
-        finalWpm: current.currentWpm,
-        finalAccuracy: accuracy,
-        wordsCompleted: current.completedWordsCount,
-        finalScore: score,
-      };
-      current.multiplayerChannel.send({
-        type: 'broadcast',
-        event: 'MATCH_FINISH',
-        payload: finalStats,
-      });
-      setIsPodiumOpen(true);
-      setMultiplayerPhase('podium');
+    if (current.currentView === 'mp-game') {
+      if (current.multiplayerChannel) {
+        const finalStats = {
+          callsign: current.multiplayerCallsign,
+          finalWpm: current.currentWpm,
+          finalAccuracy: accuracy,
+          wordsCompleted: current.completedWordsCount,
+          finalScore: score,
+        };
+        current.multiplayerChannel.send({
+          type: 'broadcast',
+          event: 'MATCH_FINISH',
+          payload: finalStats,
+        });
+      }
+      setCurrentView('mp-podium');
+    } else {
+      setCurrentView('solo-archive');
     }
   };
 
@@ -475,6 +489,7 @@ function App() {
       wordsPoolRef.current = [...freshPool];
       setWordsPool([...freshPool]);
     } else {
+      setCurrentView('solo-game');
       prngRef.current = null;
       const freshPool = shuffleArray([...DESIGN_DICTIONARY]);
       wordsPoolRef.current = freshPool;
@@ -525,16 +540,14 @@ function App() {
     } else {
       setTimeLeft(9999);
     }
-
-    setIsGameOver(false);
-    setIsPlaying(true);
   };
 
   // Keyboard controller
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       const current = stateRef.current;
-      if (!current.isPlaying || current.isGameOver || current.isPodiumOpen || current.multiplayerCountdown !== null || (current.isMultiplayer && current.multiplayerPhase !== 'playing')) return;
+      if (current.currentView !== 'solo-game' && current.currentView !== 'mp-game') return;
+      if (current.multiplayerCountdown !== null) return;
       if (e.key === 'Escape') {
         setFocusedWordId(null);
         return;
@@ -863,11 +876,11 @@ function App() {
 
     window.addEventListener('mousemove', handlePointerMove, { passive: true });
     return () => window.removeEventListener('mousemove', handlePointerMove);
-  }, [isPlaying, isMultiplayer, multiplayerChannel, multiplayerCountdown, multiplayerCallsign, isPodiumOpen]);
+  }, [currentView, multiplayerChannel, multiplayerCountdown, multiplayerCallsign]);
 
   // ── Periodic Live Score Broadcast (WPM refresh every 500ms) ───────────────
   useEffect(() => {
-    if (!isPlaying || !isMultiplayer || !multiplayerChannel || multiplayerCountdown !== null || isPodiumOpen) return;
+    if (currentView !== 'mp-game' || !multiplayerChannel || multiplayerCountdown !== null) return;
 
     const now = Date.now();
     if (now - lastScoreBroadcastRef.current >= 500) {
@@ -884,14 +897,11 @@ function App() {
         },
       });
     }
-  }, [isPlaying, isMultiplayer, multiplayerChannel, multiplayerCountdown, multiplayerCallsign, currentWpm, completedWordsCount, flowStreak, accuracy, isPodiumOpen]);
+  }, [currentView, multiplayerChannel, multiplayerCountdown, multiplayerCallsign, currentWpm, completedWordsCount, flowStreak, accuracy]);
 
   // ── Multiplayer Lobby Reset & Transition Protocol ─────────────────────────
   const transitionToLobby = useCallback(() => {
-    setMultiplayerPhase('lobby');
-    setIsPodiumOpen(false);
-    setIsPlaying(false);
-    setIsGameOver(false);
+    setCurrentView('mp-lobby');
     setMultiplayerCountdown(null);
 
     // Reset game session metrics cleanly
@@ -931,14 +941,10 @@ function App() {
       supabase.removeChannel(multiplayerChannel);
       setMultiplayerChannel(null);
     }
-    setIsMultiplayer(false);
-    setMultiplayerPhase('lobby');
+    setCurrentView('landing');
     setIsMultiplayerHost(false);
     setMultiplayerRoomCode(null);
     setMultiplayerPlayers([]);
-    setIsPodiumOpen(false);
-    setIsGameOver(false);
-    setIsPlaying(false);
     setMultiplayerCountdown(null);
     setOpponentCursors({});
     setOpponentScores({});
@@ -1045,8 +1051,7 @@ function App() {
 
   // ── Multiplayer Launch Handler ─────────────────────────────────────────────
   const handleMultiplayerLaunch = useCallback((payload: MultiplayerLaunchPayload) => {
-    setIsMultiplayer(true);
-    setMultiplayerPhase('countdown');
+    setCurrentView('mp-game');
     setIsMultiplayerHost(payload.hostCallsign === payload.callsign);
     setMultiplayerRoomCode(payload.roomCode);
     setMultiplayerCallsign(payload.callsign);
@@ -1055,8 +1060,6 @@ function App() {
     setOpponentCursors({});
     setOpponentScores({});
     setOpponentFinishResults({});
-    setIsPodiumOpen(false);
-    setIsGameOver(false);
     setGameMode('Chrono');
 
     // Deterministic seeding for identical words and coordinates!
@@ -1078,8 +1081,6 @@ function App() {
       } else {
         clearInterval(timer);
         setMultiplayerCountdown(null);
-        setMultiplayerPhase('playing');
-        setIsPlaying(true);
       }
     }, 1000);
   }, [muted]);
@@ -1145,6 +1146,111 @@ function App() {
   const bgParallaxX = mouseDeltaX * 0.01;
   const bgParallaxY = mouseDeltaY * 0.01;
 
+  // Active In-Game Telemetry and Controls HUD overlay
+  const renderActiveHud = (isMp: boolean) => (
+    <div className="active-hud-overlay">
+      {/* Top-Left: Proximity Variable Title */}
+      <div className="hud-logo-container">
+        <VariableTitle mousePos={mousePos} onClick={triggerGameOver} theme={theme} />
+      </div>
+
+      {/* Top-Right: Game controls */}
+      <div className="hud-controls">
+        <VelocityButton
+          onClick={() => setMuted(!muted)}
+          ariaLabel={muted ? 'Unmute' : 'Mute'}
+        >
+          {muted ? <VolumeX size={14} /> : <Volume2 size={14} />}
+        </VelocityButton>
+        <VelocityButton
+          onClick={() => setTheme(theme === 'light' ? 'dark' : 'light')}
+          ariaLabel="Toggle theme"
+        >
+          {theme === 'light' ? <Moon size={14} /> : <Sun size={14} />}
+        </VelocityButton>
+        {!isMp && (
+          <VelocityButton
+            onClick={() => initializeGame()}
+            ariaLabel="Reset Game"
+          >
+            <RotateCcw size={14} />
+          </VelocityButton>
+        )}
+        <VelocityButton
+          onClick={triggerGameOver}
+          ariaLabel="Quit Game"
+        >
+          [ QUIT ]
+        </VelocityButton>
+      </div>
+
+      {/* Bottom-Left: Telemetry HUD stats */}
+      <div className="accuracy-stats-panel">
+        <div className="stat-row">
+          <span className="stat-label">MODE:</span>
+          <span className="stat-value">{gameMode.toUpperCase()}</span>
+        </div>
+        {(gameMode === 'Chrono' || gameMode === 'Overdrive') && (
+          <div className="stat-row">
+            <span className="stat-label">TIME:</span>
+            <span className="stat-value">{timeLeft}S</span>
+          </div>
+        )}
+        {gameMode !== 'Zen' && (
+          <div className="stat-row">
+            <span className="stat-label">SCORE:</span>
+            <span className="stat-value">{score}</span>
+          </div>
+        )}
+        <div className="stat-row">
+          <span className="stat-label">WPM:</span>
+          <span className="stat-value">{currentWpm}</span>
+        </div>
+        <div className="stat-row">
+          <span className="stat-label">ACC:</span>
+          <span className="stat-value">{accuracy}%</span>
+        </div>
+        <div className="stat-row">
+          <span className="stat-label">WORDS:</span>
+          <span className="stat-value">{completedWordsCount}</span>
+        </div>
+        {flowStreak > 0 && gameMode !== 'Zen' && (
+          <div className="stat-row">
+            <span className="stat-label">FLOW:</span>
+            <span className="stat-value">x{flowStreak + 1}</span>
+          </div>
+        )}
+      </div>
+
+      {/* Bottom-Right / Background: Ghost WPM + Momentum Bar */}
+      <div 
+        className="massive-wpm-container" 
+        style={{ 
+          transform: `translate(${bgParallaxX}px, ${bgParallaxY}px)`
+        }}
+      >
+        {currentWpm > 0 ? currentWpm : '00'}
+      </div>
+
+      {/* Momentum Bar Track */}
+      <div
+        className="momentum-bar-track"
+        style={{ transform: `translate(${bgParallaxX}px, ${bgParallaxY}px)` }}
+      >
+        <div ref={momentumBarRef} className="momentum-bar-fill" />
+      </div>
+
+      <div 
+        className={`ghost-synergy-flash ${showSynergyFlash ? 'active' : ''} ${isPerfectSynergy ? 'perfect' : ''}`} 
+        style={{ 
+          transform: `translate(${bgParallaxX}px, ${bgParallaxY}px)`
+        }}
+      >
+        {isPerfectSynergy ? 'PERFECT' : `${synergyPoints} SYNERGY`}
+      </div>
+    </div>
+  );
+
   return (
     <>
       <CinematicAtmosphere theme={theme} />
@@ -1170,274 +1276,216 @@ function App() {
           {/* Neural Tether Canvas Background */}
           <BackgroundGrid
             theme={theme}
-            words={words.map(w => ({
+            words={(currentView === 'solo-game' || currentView === 'mp-game') ? words.map(w => ({
               x: w.x + fgParallaxX,
               y: w.y + fgParallaxY,
               isTypable: isWithinRadius(w.x, w.y, mousePos.x, mousePos.y),
               isFocused: w.id === focusedWordId,
-            }))}
+            })) : []}
             implosion={implosion}
             frictionActive={frictionActive}
             mousePos={mousePos}
             synergyPing={synergyPing}
           />
 
-          {/* Interactive Word Nodes Space */}
-          <div 
-            className="interactive-area"
-            style={{
-              pointerEvents: (isMultiplayer ? multiplayerPhase === 'playing' : (isPlaying && !isGameOver)) ? 'auto' : 'none',
-            }}
-          >
-            {((isMultiplayer ? (multiplayerPhase === 'playing' || multiplayerPhase === 'countdown') : isPlaying)) &&
-              words.map(w => (
-                <WordNode
-                  key={w.id}
-                  word={w.word}
-                  x={w.x}
-                  y={w.y}
-                  typedLength={w.typedLength}
-                  isTypable={isWithinRadius(w.x, w.y, mousePos.x, mousePos.y)}
-                  isFocused={w.id === focusedWordId}
+          {/* Bulletproof Single Source of Truth Router wrapped in Error Boundary */}
+          <ErrorBoundary theme={theme} onReset={() => setCurrentView('landing')}>
+            {/* 1. ASYMMETRIC BENTO HUB (START / HUB SCREEN OVERLAY) */}
+            {currentView === 'landing' && (
+              <BentoHub
+                theme={theme}
+                setTheme={setTheme}
+                muted={muted}
+                setMuted={setMuted}
+                showLeaderboard={showLeaderboard}
+                setShowLeaderboard={setShowLeaderboard}
+                gameMode={gameMode}
+                setGameMode={setGameMode}
+                scores={scores}
+                getLeaderboardData={getLeaderboardData}
+                mousePos={mousePos}
+                onBeginSession={() => initializeGame()}
+                onOpenMultiplayer={() => setCurrentView('mp-lobby')}
+              />
+            )}
+
+            {/* 2. SOLO GAMEPLAY SESSION */}
+            {currentView === 'solo-game' && (
+              <>
+                <div 
+                  className="interactive-area"
+                  style={{ pointerEvents: 'auto' }}
+                >
+                  {words.map(w => (
+                    <WordNode
+                      key={w.id}
+                      word={w.word}
+                      x={w.x}
+                      y={w.y}
+                      typedLength={w.typedLength}
+                      isTypable={isWithinRadius(w.x, w.y, mousePos.x, mousePos.y)}
+                      isFocused={w.id === focusedWordId}
+                      theme={theme}
+                      mousePos={mousePos}
+                      parallaxX={fgParallaxX}
+                      parallaxY={fgParallaxY}
+                    />
+                  ))}
+                </div>
+                {renderActiveHud(false)}
+              </>
+            )}
+
+            {/* 3. SOLO SESSION ARCHIVE (SCORE SCREEN) */}
+            {currentView === 'solo-archive' && (
+              <SessionArchive
+                score={score}
+                wpm={currentWpm}
+                peakWpm={peakWpm}
+                accuracy={accuracy}
+                correctKeys={correctKeys}
+                incorrectKeys={incorrectKeys}
+                flowStreak={flowStreak}
+                synergyPoints={synergyPoints}
+                gameMode={gameMode}
+                mousePath={mousePathRef.current}
+                onRecalibrate={() => initializeGame()}
+                onReturnToNucleus={() => {
+                  setCurrentView('landing');
+                  setWords([]);
+                  setFocusedWordId(null);
+                  setCorrectKeys(0);
+                  setIncorrectKeys(0);
+                  setCompletedWordsCount(0);
+                  setStartTime(null);
+                  setCurrentWpm(0);
+                  setPeakWpm(0);
+                  setLastCompletionTime(null);
+                  setFlowStreak(0);
+                  setSynergyPoints(0);
+                  setShowSynergyFlash(false);
+                  setIsPerfectSynergy(false);
+                  setFrictionActive(false);
+                  setImplosion(null);
+                  setSynergyPing(null);
+                  setShowLeaderboard(false);
+                  if (momentumDecayTimeoutRef.current) clearTimeout(momentumDecayTimeoutRef.current);
+                  if (momentumDecayRef.current) clearInterval(momentumDecayRef.current);
+                  if (momentumAnimRef.current) cancelAnimationFrame(momentumAnimRef.current);
+                  if (momentumBarRef.current) momentumBarRef.current.style.width = '0%';
+                  keystrokesTimeline.current = [];
+                  mousePathRef.current = [];
+                }}
+                theme={theme}
+              />
+            )}
+
+            {/* 4. REALTIME MULTIPLAYER ARENA LOBBY */}
+            {currentView === 'mp-lobby' && (
+              <MultiplayerLobby
+                theme={theme}
+                initialRoomCode={multiplayerRoomCode || undefined}
+                initialCallsign={multiplayerCallsign || undefined}
+                existingChannel={multiplayerChannel}
+                existingPlayers={multiplayerPlayers}
+                isHostUser={isMultiplayerHost}
+                onClose={handleLeaveArena}
+                onLaunchGame={handleMultiplayerLaunch}
+              />
+            )}
+
+            {/* 5. REALTIME MULTIPLAYER GAMEPLAY SESSION */}
+            {currentView === 'mp-game' && (
+              <>
+                <div 
+                  className="interactive-area"
+                  style={{
+                    pointerEvents: multiplayerCountdown !== null ? 'none' : 'auto',
+                  }}
+                >
+                  {words.map(w => (
+                    <WordNode
+                      key={w.id}
+                      word={w.word}
+                      x={w.x}
+                      y={w.y}
+                      typedLength={w.typedLength}
+                      isTypable={isWithinRadius(w.x, w.y, mousePos.x, mousePos.y)}
+                      isFocused={w.id === focusedWordId}
+                      theme={theme}
+                      mousePos={mousePos}
+                      parallaxX={fgParallaxX}
+                      parallaxY={fgParallaxY}
+                    />
+                  ))}
+                </div>
+
+                {/* Multiplayer HUD overlay */}
+                {renderActiveHud(true)}
+
+                {/* Realtime Multiplayer Race Ribbon */}
+                <MultiplayerRaceRibbon
+                  localCallsign={multiplayerCallsign || 'YOU'}
+                  localWpm={currentWpm}
+                  localCompletedCount={completedWordsCount}
+                  localStreak={flowStreak}
+                  localAccuracy={accuracy}
+                  opponentScores={opponentScores}
                   theme={theme}
-                  mousePos={mousePos}
-                  parallaxX={fgParallaxX}
-                  parallaxY={fgParallaxY}
+                  roomCode={multiplayerRoomCode || 'ARENA'}
+                  timeLeft={timeLeft}
                 />
-              ))}
-          </div>
 
-          {/* ACTIVE GAME PLAY HUD */}
-          {((isMultiplayer && multiplayerPhase === 'playing') || (!isMultiplayer && isPlaying)) && (
-            <div className="active-hud-overlay">
-              {/* Top-Left: Proximity Variable Title */}
-              <div className="hud-logo-container">
-                <VariableTitle mousePos={mousePos} onClick={triggerGameOver} theme={theme} />
-              </div>
+                {/* Realtime Multiplayer Ghost Cursors */}
+                <GhostCursors cursors={opponentCursors} theme={theme} />
 
-              {/* Top-Right: Game controls */}
-              <div className="hud-controls">
-                <VelocityButton
-                  onClick={() => setMuted(!muted)}
-                  ariaLabel={muted ? 'Unmute' : 'Mute'}
-                >
-                  {muted ? <VolumeX size={14} /> : <Volume2 size={14} />}
-                </VelocityButton>
-                <VelocityButton
-                  onClick={() => setTheme(theme === 'light' ? 'dark' : 'light')}
-                  ariaLabel="Toggle theme"
-                >
-                  {theme === 'light' ? <Moon size={14} /> : <Sun size={14} />}
-                </VelocityButton>
-                {!isMultiplayer && (
-                  <VelocityButton
-                    onClick={() => initializeGame()}
-                    ariaLabel="Reset Game"
-                  >
-                    <RotateCcw size={14} />
-                  </VelocityButton>
+                {/* Synchronized 3-Second Countdown Overlay */}
+                {multiplayerCountdown !== null && (
+                  <MultiplayerCountdown countdown={multiplayerCountdown} theme={theme} />
                 )}
-                <VelocityButton
-                  onClick={triggerGameOver}
-                  ariaLabel="Quit Game"
-                >
-                  [ QUIT ]
-                </VelocityButton>
-              </div>
+              </>
+            )}
 
-              {/* Bottom-Left: Telemetry HUD stats */}
-              <div className="accuracy-stats-panel">
-                <div className="stat-row">
-                  <span className="stat-label">MODE:</span>
-                  <span className="stat-value">{gameMode.toUpperCase()}</span>
-                </div>
-                {(gameMode === 'Chrono' || gameMode === 'Overdrive') && (
-                  <div className="stat-row">
-                    <span className="stat-label">TIME:</span>
-                    <span className="stat-value">{timeLeft}S</span>
-                  </div>
-                )}
-                {gameMode !== 'Zen' && (
-                  <div className="stat-row">
-                    <span className="stat-label">SCORE:</span>
-                    <span className="stat-value">{score}</span>
-                  </div>
-                )}
-                <div className="stat-row">
-                  <span className="stat-label">WPM:</span>
-                  <span className="stat-value">{currentWpm}</span>
-                </div>
-                <div className="stat-row">
-                  <span className="stat-label">ACC:</span>
-                  <span className="stat-value">{accuracy}%</span>
-                </div>
-                <div className="stat-row">
-                  <span className="stat-label">WORDS:</span>
-                  <span className="stat-value">{completedWordsCount}</span>
-                </div>
-                {flowStreak > 0 && gameMode !== 'Zen' && (
-                  <div className="stat-row">
-                    <span className="stat-label">FLOW:</span>
-                    <span className="stat-value">x{flowStreak + 1}</span>
-                  </div>
-                )}
-              </div>
-
-              {/* Bottom-Right / Background: Ghost WPM + Momentum Bar */}
-              <div 
-                className="massive-wpm-container" 
-                style={{ 
-                  transform: `translate(${bgParallaxX}px, ${bgParallaxY}px)`
+            {/* 6. REALTIME MULTIPLAYER PODIUM ARCHIVE */}
+            {currentView === 'mp-podium' && (
+              <PodiumArchive
+                players={podiumPlayersList}
+                roomCode={multiplayerRoomCode || 'ARENA'}
+                theme={theme}
+                onReturnToLobby={() => {
+                  // If Host clicks it: broadcast RESET_LOBBY so all connected peers return together
+                  if (isMultiplayerHost && multiplayerChannel) {
+                    multiplayerChannel.send({
+                      type: 'broadcast',
+                      event: 'RESET_LOBBY',
+                      payload: { roomCode: multiplayerRoomCode },
+                    });
+                  }
+                  transitionToLobby();
                 }}
-              >
-                {currentWpm > 0 ? currentWpm : '00'}
-              </div>
+                onExitArena={handleLeaveArena}
+              />
+            )}
 
-              {/* Momentum Bar Track */}
-              <div
-                className="momentum-bar-track"
-                style={{ transform: `translate(${bgParallaxX}px, ${bgParallaxY}px)` }}
-              >
-                <div ref={momentumBarRef} className="momentum-bar-fill" />
-              </div>
-
-              <div 
-                className={`ghost-synergy-flash ${showSynergyFlash ? 'active' : ''} ${isPerfectSynergy ? 'perfect' : ''}`} 
-                style={{ 
-                  transform: `translate(${bgParallaxX}px, ${bgParallaxY}px)`
-                }}
-              >
-                {isPerfectSynergy ? 'PERFECT' : `${synergyPoints} SYNERGY`}
-              </div>
-            </div>
-          )}
-
-          {/* REALTIME MULTIPLAYER RACE HUD RIBBON */}
-          {isMultiplayer && multiplayerPhase === 'playing' && (
-            <MultiplayerRaceRibbon
-              localCallsign={multiplayerCallsign || 'YOU'}
-              localWpm={currentWpm}
-              localCompletedCount={completedWordsCount}
-              localStreak={flowStreak}
-              localAccuracy={accuracy}
-              opponentScores={opponentScores}
-              theme={theme}
-              roomCode={multiplayerRoomCode || 'ARENA'}
-              timeLeft={timeLeft}
-            />
-          )}
-
-          {/* REALTIME MULTIPLAYER GHOST CURSORS */}
-          {isMultiplayer && multiplayerPhase === 'playing' && (
-            <GhostCursors cursors={opponentCursors} theme={theme} />
-          )}
-
-          {/* SYNCHRONIZED COUNTDOWN OVERLAY */}
-          {isMultiplayer && multiplayerPhase === 'countdown' && (
-            <MultiplayerCountdown countdown={multiplayerCountdown} theme={theme} />
-          )}
-
-          {/* MULTIPLAYER PODIUM ARCHIVE (MATCH COMPLETION) */}
-          {isMultiplayer && multiplayerPhase === 'podium' && (
-            <PodiumArchive
-              players={podiumPlayersList}
-              roomCode={multiplayerRoomCode || 'ARENA'}
-              theme={theme}
-              onReturnToLobby={() => {
-                // Button 1: '[ RETURN_TO_LOBBY ]' (Host & Peer Sync)
-                // If the Host clicks it: broadcast RESET_LOBBY so all connected peers return together
-                if (isMultiplayerHost && multiplayerChannel) {
-                  multiplayerChannel.send({
-                    type: 'broadcast',
-                    event: 'RESET_LOBBY',
-                    payload: { roomCode: multiplayerRoomCode },
-                  });
-                }
-                transitionToLobby();
-              }}
-              onExitArena={handleLeaveArena}
-            />
-          )}
-
-          {/* REALTIME MULTIPLAYER ARENA LOBBY (OR FALLBACK GUARD) */}
-          {isMultiplayer && (multiplayerPhase === 'lobby' || (!['countdown', 'playing', 'podium'].includes(multiplayerPhase))) && (
-            <MultiplayerLobby
-              theme={theme}
-              initialRoomCode={multiplayerRoomCode || undefined}
-              existingChannel={multiplayerChannel}
-              existingPlayers={multiplayerPlayers}
-              isHostUser={isMultiplayerHost}
-              onClose={handleLeaveArena}
-              onLaunchGame={handleMultiplayerLaunch}
-            />
-          )}
-
-          {/* 1. ASYMMETRIC BENTO HUB (START / HUB SCREEN OVERLAY) */}
-          {!isMultiplayer && !isPlaying && !isGameOver && (
-            <BentoHub
-              theme={theme}
-              setTheme={setTheme}
-              muted={muted}
-              setMuted={setMuted}
-              showLeaderboard={showLeaderboard}
-              setShowLeaderboard={setShowLeaderboard}
-              gameMode={gameMode}
-              setGameMode={setGameMode}
-              scores={scores}
-              getLeaderboardData={getLeaderboardData}
-              mousePos={mousePos}
-              onBeginSession={() => initializeGame()}
-              onOpenMultiplayer={() => {
-                setIsMultiplayer(true);
-                setMultiplayerPhase('lobby');
-              }}
-            />
-          )}
-
-          {/* 4. THE SESSION ARCHIVE (SINGLEPLAYER SCORE SCREEN UPON GAME COMPLETION) */}
-          {isGameOver && !isMultiplayer && (
-            <SessionArchive
-              score={score}
-              wpm={currentWpm}
-              peakWpm={peakWpm}
-              accuracy={accuracy}
-              correctKeys={correctKeys}
-              incorrectKeys={incorrectKeys}
-              flowStreak={flowStreak}
-              synergyPoints={synergyPoints}
-              gameMode={gameMode}
-              mousePath={mousePathRef.current}
-              onRecalibrate={() => initializeGame()}
-              onReturnToNucleus={() => {
-                setIsGameOver(false);
-                setIsPlaying(false);
-                setWords([]);
-                setFocusedWordId(null);
-                setCorrectKeys(0);
-                setIncorrectKeys(0);
-                setCompletedWordsCount(0);
-                setStartTime(null);
-                setCurrentWpm(0);
-                setPeakWpm(0);
-                setLastCompletionTime(null);
-                setFlowStreak(0);
-                setSynergyPoints(0);
-                setShowSynergyFlash(false);
-                setIsPerfectSynergy(false);
-                setFrictionActive(false);
-                setImplosion(null);
-                setSynergyPing(null);
-                setShowLeaderboard(false);
-                if (momentumDecayTimeoutRef.current) clearTimeout(momentumDecayTimeoutRef.current);
-                if (momentumDecayRef.current) clearInterval(momentumDecayRef.current);
-                if (momentumAnimRef.current) cancelAnimationFrame(momentumAnimRef.current);
-                if (momentumBarRef.current) momentumBarRef.current.style.width = '0%';
-                keystrokesTimeline.current = [];
-                mousePathRef.current = [];
-              }}
-              theme={theme}
-            />
-          )}
+            {/* FAIL-SAFE FALLBACK: Guard against unexpected view state or desync */}
+            {!['landing', 'solo-game', 'solo-archive', 'mp-lobby', 'mp-game', 'mp-podium'].includes(currentView) && (
+              <BentoHub
+                theme={theme}
+                setTheme={setTheme}
+                muted={muted}
+                setMuted={setMuted}
+                showLeaderboard={showLeaderboard}
+                setShowLeaderboard={setShowLeaderboard}
+                gameMode={gameMode}
+                setGameMode={setGameMode}
+                scores={scores}
+                getLeaderboardData={getLeaderboardData}
+                mousePos={mousePos}
+                onBeginSession={() => initializeGame()}
+                onOpenMultiplayer={() => setCurrentView('mp-lobby')}
+              />
+            )}
+          </ErrorBoundary>
         </div>
       )}
     </>

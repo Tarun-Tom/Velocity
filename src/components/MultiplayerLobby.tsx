@@ -269,13 +269,22 @@ export const MultiplayerLobby: React.FC<MultiplayerLobbyProps> = ({
     setConnectionError(null);
     setIsConnecting(true);
 
-    // Disconnect any existing non-inherited channel first
-    if (channelRef.current && !existingChannel) {
-      channelRef.current.unsubscribe();
-      supabase.removeChannel(channelRef.current);
-    }
-
     const channelName = `room:${formattedCode}`;
+
+    // Purge any stale or duplicate channels with this topic from Supabase client registry
+    try {
+      const activeChannels = supabase.getChannels();
+      activeChannels.forEach((ch) => {
+        if (ch.topic === `realtime:${channelName}` || ch === channelRef.current) {
+          ch.unsubscribe();
+          supabase.removeChannel(ch);
+        }
+      });
+    } catch (cleanErr) {
+      console.warn('[CHANNEL_PURGE_WARN]', cleanErr);
+    }
+    channelRef.current = null;
+
     const channel = supabase.channel(channelName, {
       config: {
         presence: {
@@ -313,28 +322,51 @@ export const MultiplayerLobby: React.FC<MultiplayerLobbyProps> = ({
             players: currentPlayersRef.current.length > 0 ? currentPlayersRef.current : [{ callsign: effectiveTag, isHost: hosting, joinedAt: Date.now(), status: 'SYNCHRONIZED' }],
           });
         }
-      })
-      .subscribe(async (status) => {
+      });
+
+    let retryAttempts = 0;
+
+    const executeSubscription = () => {
+      channel.subscribe(async (status) => {
+        console.log('[REALTIME_SUBSCRIBE_STATUS]', status);
         if (status === 'SUBSCRIBED') {
-          await channel.track({
-            callsign: effectiveTag,
-            isHost: hosting,
-            joinedAt: Date.now(),
-            status: 'SYNCHRONIZED',
-          });
+          try {
+            await channel.track({
+              callsign: effectiveTag,
+              isHost: hosting,
+              joinedAt: Date.now(),
+              status: 'SYNCHRONIZED',
+            });
+          } catch (trackErr) {
+            console.warn('[PRESENCE_TRACK_WARN]', trackErr);
+          }
           setIsConnected(true);
           setIsConnecting(false);
           setIsHost(hosting);
           setRoomCode(formattedCode);
+          setConnectionError(null);
         } else if (status === 'CHANNEL_ERROR') {
           setIsConnecting(false);
-          setConnectionError('SIGNAL_ERROR: COULD NOT SYNC WITH LOBBY');
+          setConnectionError('SIGNAL_ERROR: COULD NOT SYNC WITH LOBBY. PLEASE RETRY.');
         } else if (status === 'TIMED_OUT') {
-          setIsConnecting(false);
-          setConnectionError('TIMED_OUT: PEER VECTOR UNREACHABLE');
+          if (retryAttempts < 1) {
+            retryAttempts++;
+            console.log('[REALTIME_SOCKET_RETRYING...]');
+            setTimeout(() => {
+              if (channelRef.current) {
+                executeSubscription();
+              }
+            }, 800);
+          } else {
+            setIsConnecting(false);
+            setConnectionError('PEER_VECTOR_DELAYED: NETWORK TIMEOUT. CLICK [ CONNECT ] TO RETRY.');
+          }
         }
-      });
-  }, [callsign, existingChannel, onLaunchGame, parsePresenceRoster]);
+      }, 20000);
+    };
+
+    executeSubscription();
+  }, [callsign, onLaunchGame, parsePresenceRoster]);
 
   // ── Auto-Join Setup for Invited Friends ───────────────────────────────────
   useEffect(() => {
@@ -667,9 +699,34 @@ export const MultiplayerLobby: React.FC<MultiplayerLobbyProps> = ({
               padding: '10px 14px',
               marginBottom: '24px',
               letterSpacing: '0.12em',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              gap: '12px',
             }}
           >
-            [!] {connectionError}
+            <span>[!] {connectionError}</span>
+            {inputRoomCode.trim() && (
+              <button
+                type="button"
+                onClick={() => connectToRoom(inputRoomCode, isHost)}
+                style={{
+                  background: 'rgba(217, 83, 79, 0.15)',
+                  border: '1px solid #D9534F',
+                  color: textColor,
+                  fontFamily: "'JetBrains Mono', monospace",
+                  fontSize: '10px',
+                  fontWeight: 700,
+                  letterSpacing: '0.12em',
+                  padding: '4px 10px',
+                  cursor: 'pointer',
+                  borderRadius: 0,
+                  outline: 'none',
+                }}
+              >
+                [ RETRY ]
+              </button>
+            )}
           </div>
         )}
 

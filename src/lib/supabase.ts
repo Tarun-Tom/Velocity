@@ -22,6 +22,7 @@ export const supabase: SupabaseClient = createClient(
       params: {
         eventsPerSecond: 10,
       },
+      timeout: 20000,
     },
   }
 );

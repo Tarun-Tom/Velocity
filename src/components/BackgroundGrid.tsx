@@ -129,11 +129,11 @@ export const BackgroundGrid: React.FC<BackgroundGridProps> = ({
       const activeImplosions = implosionsRef.current.filter((imp) => now - imp.time < 300);
       implosionsRef.current = activeImplosions;
 
-      // Light mode: Graphite (#333333) at 10% idle / 28% active — clearly visible, non-distracting
+      // Light mode: Roasted Charcoal (#1E1C19) at 8% idle / 24% active
       // Dark mode:  Bone White (#FDFDFB) at 8% idle / 28% active
-      const dotColor      = currentTheme === 'light' ? 'rgba(51, 51, 51, 0.10)' : 'rgba(253, 253, 251, 0.08)';
-      const activeDotColor = currentTheme === 'light' ? 'rgba(51, 51, 51, 0.28)' : 'rgba(253, 253, 251, 0.28)';
-      const tetherColor = '#C5A059'; // Gold status accent
+      const dotColor       = currentTheme === 'light' ? 'rgba(30, 28, 25, 0.08)' : 'rgba(253, 253, 251, 0.08)';
+      const activeDotColor = currentTheme === 'light' ? 'rgba(30, 28, 25, 0.24)' : 'rgba(253, 253, 251, 0.28)';
+      const tetherColor    = currentTheme === 'light' ? '#9A762E' : '#C5A059'; // Burnished Antique Brass (light) / Gold (dark)
 
       // Read live mouse position from ref (never causes loop restart)
       const mx = mousePosRef.current.x;
@@ -308,7 +308,7 @@ export const BackgroundGrid: React.FC<BackgroundGridProps> = ({
             ctx.moveTo(smoothMouseX, smoothMouseY);
             ctx.lineTo(drawX, drawY);
             ctx.lineWidth = 0.5;
-            ctx.strokeStyle = 'rgba(197, 160, 89, 0.45)'; // 0.5px Gold hairline vector
+            ctx.strokeStyle = currentTheme === 'light' ? 'rgba(154, 118, 46, 0.50)' : 'rgba(197, 160, 89, 0.45)';
             ctx.stroke();
 
             // Render captured orbiting tether dot highlighted in Gold
@@ -337,14 +337,14 @@ export const BackgroundGrid: React.FC<BackgroundGridProps> = ({
           ctx.moveTo(smoothMouseX, smoothMouseY);
           ctx.lineTo(word.x, word.y);
           ctx.lineWidth = 1.0;
-          ctx.strokeStyle = 'rgba(197, 160, 89, 0.30)';
+          ctx.strokeStyle = currentTheme === 'light' ? 'rgba(154, 118, 46, 0.35)' : 'rgba(197, 160, 89, 0.30)';
           ctx.setLineDash([]);
           ctx.stroke();
 
           // Small gold anchor dot at the word's exact center
           ctx.beginPath();
           ctx.arc(word.x, word.y, 2.5, 0, Math.PI * 2);
-          ctx.fillStyle = 'rgba(197, 160, 89, 0.55)';
+          ctx.fillStyle = currentTheme === 'light' ? 'rgba(154, 118, 46, 0.65)' : 'rgba(197, 160, 89, 0.55)';
           ctx.fill();
         } else {
           // ── APPROACH TETHER: faint dashed guide ──────────────────────────
@@ -352,7 +352,7 @@ export const BackgroundGrid: React.FC<BackgroundGridProps> = ({
           ctx.moveTo(smoothMouseX, smoothMouseY);
           ctx.lineTo(word.x, word.y);
           ctx.lineWidth = 0.6;
-          ctx.strokeStyle = currentTheme === 'light' ? 'rgba(0, 0, 0, 0.10)' : 'rgba(253, 253, 251, 0.12)';
+          ctx.strokeStyle = currentTheme === 'light' ? 'rgba(30, 28, 25, 0.12)' : 'rgba(253, 253, 251, 0.12)';
           ctx.setLineDash([3, 5]);
           ctx.stroke();
           ctx.setLineDash([]);
@@ -377,33 +377,30 @@ export const BackgroundGrid: React.FC<BackgroundGridProps> = ({
           ctx.moveTo(ping.fromX, ping.fromY);
           ctx.lineTo(ping.toX, ping.toY);
           ctx.lineWidth = 1.0;
-          ctx.strokeStyle = `rgba(197, 160, 89, ${pingOpacity.toFixed(3)})`;
+          ctx.strokeStyle = currentTheme === 'light'
+            ? `rgba(154, 118, 46, ${pingOpacity.toFixed(3)})`
+            : `rgba(197, 160, 89, ${pingOpacity.toFixed(3)})`;
           ctx.setLineDash([]);
           ctx.stroke();
 
           // Origin dot — ghost of the completed word position
           ctx.beginPath();
-          ctx.arc(ping.fromX, ping.fromY, 2, 0, Math.PI * 2);
-          ctx.fillStyle = `rgba(197, 160, 89, ${(pingOpacity * 0.7).toFixed(3)})`;
+          ctx.arc(ping.fromX, ping.fromY, 2.5, 0, Math.PI * 2);
+          ctx.fillStyle = currentTheme === 'light'
+            ? `rgba(154, 118, 46, ${pingOpacity.toFixed(3)})`
+            : `rgba(197, 160, 89, ${pingOpacity.toFixed(3)})`;
           ctx.fill();
 
-          // Destination pulse ring — expands 0→6px, fades in then out
-          // Early half (t < 0.5): ring grows in; late half: it fades away
-          const ringOpacity = t < 0.5
-            ? pingOpacity * (t * 2)         // fade-in as ring expands
-            : pingOpacity;                   // hold and fade with line
-          const ringRadius = 2 + t * 6;     // 2px → 8px over 200ms
+          // Destination pulse ring — expands 2→8px, fades with line
+          const ringOpacity = t < 0.5 ? pingOpacity * (t * 2) : pingOpacity;
+          const ringRadius = 2 + t * 6;
           ctx.beginPath();
           ctx.arc(ping.toX, ping.toY, ringRadius, 0, Math.PI * 2);
           ctx.lineWidth = 0.8;
-          ctx.strokeStyle = `rgba(197, 160, 89, ${ringOpacity.toFixed(3)})`;
+          ctx.strokeStyle = currentTheme === 'light'
+            ? `rgba(154, 118, 46, ${ringOpacity.toFixed(3)})`
+            : `rgba(197, 160, 89, ${ringOpacity.toFixed(3)})`;
           ctx.stroke();
-
-          // Solid center dot at destination — gives a crisp 'arrival' anchor
-          ctx.beginPath();
-          ctx.arc(ping.toX, ping.toY, 1.5, 0, Math.PI * 2);
-          ctx.fillStyle = `rgba(197, 160, 89, ${(pingOpacity * 0.9).toFixed(3)})`;
-          ctx.fill();
         }
       }
 

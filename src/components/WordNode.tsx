@@ -17,9 +17,10 @@ interface WordNodeProps {
 }
 
 // ── Design tokens ──────────────────────────────────────────────────────────────
-const GOLD     = '#C5A059'; // TYPED — archival success state
-const BONE     = '#FDFDFB'; // CURRENT + REMAINING in dark mode — neutral / queue
-const GRAPHITE = '#333333'; // CURRENT + REMAINING in light mode — contrast-safe negative
+const GOLD_DARK  = '#C5A059'; // TYPED — archival success state in dark mode
+const GOLD_LIGHT = '#9A762E'; // TYPED — Burnished Antique Brass in light mode
+const BONE       = '#FDFDFB'; // CURRENT + REMAINING in dark mode — neutral / queue
+const CHARCOAL   = '#1E1C19'; // CURRENT + REMAINING in light mode — Roasted Charcoal
 
 // Spring for scale/opacity changes — position is RAF-only, never Framer-driven
 const springConfig = { type: 'spring' as const, stiffness: 120, damping: 20 };
@@ -27,12 +28,16 @@ const springConfig = { type: 'spring' as const, stiffness: 120, damping: 20 };
 // ── CurrentCharacter ──────────────────────────────────────────────────────────
 // Isolated component so the pulse animation is scoped to this single glyph
 // and does not re-trigger on parent re-renders.
-const CurrentCharacter: React.FC<{ char: string; neutralColor: string }> = ({ char, neutralColor }) => (
+const CurrentCharacter: React.FC<{ char: string; neutralColor: string; goldColor: string }> = ({
+  char,
+  neutralColor,
+  goldColor,
+}) => (
   <span
     style={{
       position:   'relative',
       display:    'inline-block',
-      color:      neutralColor, // Bone White (dark) or Graphite (light) — stands out from Gold typed chars
+      color:      neutralColor, // Bone White (dark) or Roasted Charcoal (light)
       fontWeight: 600,
       opacity:    1,
       paddingBottom: '3px',   // clearance for the 2px underline strip
@@ -62,7 +67,7 @@ const CurrentCharacter: React.FC<{ char: string; neutralColor: string }> = ({ ch
         left:            0,
         right:           0,
         height:          '2px',
-        backgroundColor: GOLD,
+        backgroundColor: goldColor,
         borderRadius:    '0px',
         pointerEvents:   'none',
       }}
@@ -83,9 +88,9 @@ export const WordNode: React.FC<WordNodeProps> = ({
   parallaxX = 0,
   parallaxY = 0,
 }) => {
-  // Derive the neutral text colour from theme — Bone White in dark, Graphite in light.
-  // This is the single source of truth for all non-Gold, non-typed characters.
-  const neutralColor = theme === 'light' ? GRAPHITE : BONE;
+  // Single source of truth for text and accent colors per theme
+  const neutralColor = theme === 'light' ? CHARCOAL : BONE;
+  const goldColor = theme === 'light' ? GOLD_LIGHT : GOLD_DARK;
   const nodeRef = useRef<HTMLDivElement>(null);
 
   // Current rendered position — exclusively written by the RAF loop
@@ -262,7 +267,7 @@ export const WordNode: React.FC<WordNodeProps> = ({
         initial={false}
         animate={{
           scale:       isFocused ? 1.2 : isTypable ? 1.0 : 0.8,
-          borderColor: GOLD,
+          borderColor: goldColor,
           borderWidth: isTypable || isFocused ? '1px' : '0px',
         }}
         transition={springConfig}
@@ -329,33 +334,12 @@ export const WordNode: React.FC<WordNodeProps> = ({
                 alignItems:    'baseline',
               }}
             >
-              {/*
-               * ── THREE-STATE CHARACTER HIERARCHY ──────────────────────────
-               *
-               * STATE 1 — TYPED (The Past)
-               *   Gold (#C5A059) · 100% opacity · wt 700
-               *   Instantly archival — no transition cost, plain <span>.
-               *
-               * STATE 2 — CURRENT (The Present / Target)
-               *   Bone White (#FDFDFB) · 100% opacity · wt 600
-               *   2px Gold (#C5A059) underline strip beneath the glyph.
-               *   Breathing pulse (opacity 1→0.35→1, 900ms ∞) on the
-               *   underline draws the eye without distracting from the
-               *   overall word. White colour provides maximum contrast
-               *   against the Gold archive chars on both sides.
-               *
-               * STATE 3 — REMAINING (The Future / Queue)
-               *   Bone White (#FDFDFB) · 15% opacity · wt 400
-               *   Present but silent — the minimum footprint for
-               *   peripheral awareness without stealing focus.
-               */}
-
               {/* STATE 1 — TYPED ─────────────────────────────────────── */}
               {typedChars.map((char, i) => (
                 <span
                   key={`t-${i}`}
                   style={{
-                    color:      GOLD,
+                    color:      goldColor,
                     fontWeight: 700,
                     opacity:    1,
                     display:    'inline-block',
@@ -367,13 +351,12 @@ export const WordNode: React.FC<WordNodeProps> = ({
 
               {/* STATE 2 — CURRENT ───────────────────────────────────── */}
               {currentChar !== null && (
-                /*
-                 * Key includes typedLength so React replaces — not updates —
-                 * the CurrentCharacter when the target letter advances.
-                 * This restarts the pulse animation from the top, giving a
-                 * crisp 'jump' sensation as the underline moves to the next char.
-                 */
-                <CurrentCharacter key={`c-${typedLength}`} char={currentChar} neutralColor={neutralColor} />
+                <CurrentCharacter
+                  key={`c-${typedLength}`}
+                  char={currentChar}
+                  neutralColor={neutralColor}
+                  goldColor={goldColor}
+                />
               )}
 
               {/* STATE 3 — REMAINING ─────────────────────────────────── */}

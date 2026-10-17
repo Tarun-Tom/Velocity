@@ -1,13 +1,13 @@
-import React from 'react';
-import { motion } from 'framer-motion';
+import React, { useState, useEffect } from 'react';
+import { motion, AnimatePresence, type Variants } from 'framer-motion';
 import { VariableTitle } from './VariableTitle';
 import { VelocityButton } from './VelocityButton';
-import { Volume2, VolumeX, Moon } from 'lucide-react';
+import { Volume2, VolumeX, Moon, Sun } from 'lucide-react';
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 export type GameMode = 'Chrono' | 'Overdrive' | 'Zen';
 
-interface LeaderboardEntry {
+export interface LeaderboardEntry {
   mode: GameMode;
   score: number;
   wpm: number;
@@ -15,479 +15,429 @@ interface LeaderboardEntry {
   date: string;
 }
 
-interface BentoHubProps {
+export interface BentoHubProps {
   theme: 'light' | 'dark';
   setTheme: (t: 'light' | 'dark') => void;
   muted: boolean;
   setMuted: (m: boolean) => void;
-  showLeaderboard: boolean;
-  setShowLeaderboard: (s: boolean) => void;
+  showLeaderboard?: boolean;
+  setShowLeaderboard?: (s: boolean) => void;
   gameMode: GameMode;
   setGameMode: (m: GameMode) => void;
-  scores: Record<string, number>;
-  getLeaderboardData: () => LeaderboardEntry[];
+  scores?: Record<string, number>;
+  getLeaderboardData?: () => LeaderboardEntry[];
   mousePos: { x: number; y: number };
   onBeginSession: () => void;
 }
 
-// ── Telemetry Corner Markers ───────────────────────────────────────────────────
-// Tiny 1px monospace '+' signs at the four interior corners of each Bento module.
-// Renders the blueprint/telemetry screen aesthetic without any visual noise.
-export const TelemetryCorners = () => (
-  <>
-    <span aria-hidden="true" style={{ position: 'absolute', top: 5, left: 7,   fontSize: 10, lineHeight: 1, color: '#C5A059', opacity: 0.45, pointerEvents: 'none', fontFamily: 'monospace', userSelect: 'none' }}>+</span>
-    <span aria-hidden="true" style={{ position: 'absolute', top: 5, right: 7,  fontSize: 10, lineHeight: 1, color: '#C5A059', opacity: 0.45, pointerEvents: 'none', fontFamily: 'monospace', userSelect: 'none' }}>+</span>
-    <span aria-hidden="true" style={{ position: 'absolute', bottom: 5, left: 7,  fontSize: 10, lineHeight: 1, color: '#C5A059', opacity: 0.45, pointerEvents: 'none', fontFamily: 'monospace', userSelect: 'none' }}>+</span>
-    <span aria-hidden="true" style={{ position: 'absolute', bottom: 5, right: 7, fontSize: 10, lineHeight: 1, color: '#C5A059', opacity: 0.45, pointerEvents: 'none', fontFamily: 'monospace', userSelect: 'none' }}>+</span>
-  </>
-);
-
-// ── Module wrapper ─────────────────────────────────────────────────────────────
-// Thin wrapper that enforces the common bento token set: 1px Gold border,
-// 0px radius, correct background per theme, relative positioning for corners.
-const Module: React.FC<{
-  span?: number;
-  rowSpan?: number;
-  style?: React.CSSProperties;
-  className?: string;
-  children: React.ReactNode;
-  theme: 'light' | 'dark';
-  noHover?: boolean;
-}> = ({ span, style, className = '', children, theme, noHover }) => (
-  <div
-    className={`bento-module ${className} ${noHover ? 'no-hover' : ''}`}
-    style={{
-      gridColumn: span ? `span ${span}` : undefined,
-      position: 'relative',
-      border: '1px solid #C5A059',
-      borderRadius: 0,
-      padding: '24px 28px',
-      background: theme === 'dark' ? 'rgba(0,0,0,0.92)' : 'rgba(253,253,251,0.92)',
-      boxSizing: 'border-box',
-      ...style,
-    }}
-  >
-    <TelemetryCorners />
-    {children}
-  </div>
-);
-
-// ── Module header label ───────────────────────────────────────────────────────
-const ModuleTag: React.FC<{ children: React.ReactNode }> = ({ children }) => (
-  <div
-    style={{
-      fontSize: 10,
-      letterSpacing: '0.22em',
-      color: '#C5A059',
-      textTransform: 'uppercase',
-      fontFamily: "'JetBrains Mono', monospace",
-      marginBottom: 14,
-      opacity: 0.85,
-    }}
-  >
-    {children}
-  </div>
-);
-
-// ── Neutral text color ─────────────────────────────────────────────────────────
-const neutral = (theme: 'light' | 'dark') =>
-  theme === 'light' ? '#333333' : '#FDFDFB';
-
 // ══════════════════════════════════════════════════════════════════════════════
-// BentoHub
+// Upgraded Minimalist Landing Page (Velocity)
 // ══════════════════════════════════════════════════════════════════════════════
 export const BentoHub: React.FC<BentoHubProps> = ({
   theme,
   setTheme,
   muted,
   setMuted,
-  showLeaderboard,
-  setShowLeaderboard,
   gameMode,
   setGameMode,
-  scores,
-  getLeaderboardData,
   mousePos,
   onBeginSession,
 }) => {
-  const [isBeginHovered, setIsBeginHovered] = React.useState(false);
+  const [, setIsCtaHovered] = useState(false);
 
-  const txt = neutral(theme);
-  const springConfig = { type: 'spring' as const, stiffness: 220, damping: 22 };
+  // Keyboard shortcut: Press ENTER to begin session immediately
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Enter') {
+        onBeginSession();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [onBeginSession]);
 
-  // Mode description copy
-  const modeDesc: Record<GameMode, string> = {
-    Chrono:    '60s fixed. Maximize WPM & accuracy.',
-    Overdrive: '15s initial. +3s per word, +5s per streak.',
-    Zen:       'Endless flow. No timer. No penalties.',
+  const isLight = theme === 'light';
+
+  // Calibrated Design Tokens:
+  // Light Mode (Warm Archival Vellum):
+  //   - Background: #FAF7F2 (Warm Antique Cream)
+  //   - Primary Text: #1E1C19 (Roasted Charcoal)
+  //   - Secondary Metadata: #5C5750
+  //   - Gold Accent: #9A762E (Burnished Antique Brass)
+  // Dark Mode:
+  //   - Background: #000000
+  //   - Primary Text: #FDFDFB (Bone White)
+  //   - Secondary Metadata: rgba(253, 253, 251, 0.60)
+  //   - Gold Accent: #C5A059
+  const goldColor = isLight ? '#9A762E' : '#C5A059';
+  const primaryTextColor = isLight ? '#1E1C19' : '#FDFDFB';
+  const secondaryTextColor = isLight ? '#5C5750' : 'rgba(253, 253, 251, 0.60)';
+  const cardBgColor = isLight ? '#FAF7F2' : '#000000';
+  const cardBorderIdle = isLight ? 'rgba(154, 118, 46, 0.20)' : 'rgba(197, 160, 89, 0.15)';
+
+  const modes: GameMode[] = ['Chrono', 'Overdrive', 'Zen'];
+
+  const modeCaptions: Record<GameMode, string> = {
+    Chrono: '60-second standardized sprint. Maximize speed and accuracy before time runs out.',
+    Overdrive: 'Survival protocol. Start with 15s. Every completed word adds +3s to the clock.',
+    Zen: 'Endless flow state. Zero timer, zero failure. 2–3 word density for rhythmic typing.',
+  };
+
+  const steps = [
+    {
+      title: '01 · TARGET',
+      description: 'Move your cursor over floating words to lock your focus.',
+    },
+    {
+      title: '02 · STRIKE',
+      description: 'Words freeze in place while you type. Letters turn gold as you hit them.',
+    },
+    {
+      title: '03 · FLOW',
+      description: 'Jump to the next word smoothly to build your Synergy streak.',
+    },
+  ];
+
+  // Micro-animations: Staggered entrance for guide cards on page load
+  const cardsContainerVariants: Variants = {
+    hidden: { opacity: 0 },
+    show: {
+      opacity: 1,
+      transition: {
+        staggerChildren: 0.08,
+        delayChildren: 0.12,
+      },
+    },
+  };
+
+  const cardItemVariants: Variants = {
+    hidden: { opacity: 0, y: 16 },
+    show: {
+      opacity: 1,
+      y: 0,
+      transition: {
+        type: 'spring' as const,
+        stiffness: 300,
+        damping: 24,
+      },
+    },
   };
 
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 12 }}
-      animate={{ opacity: 1, y: 0 }}
-      exit={{ opacity: 0, y: -12 }}
-      transition={springConfig}
-      style={{
-        position: 'fixed',
-        inset: 0,
-        zIndex: 60,
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        padding: '40px',
-        boxSizing: 'border-box',
-        pointerEvents: 'auto',
-        fontFamily: "'JetBrains Mono', monospace",
-      }}
-    >
-      {/*
-        12-COLUMN SYMMETRICAL BENTO HUB GRID
-        ─────────────────────────────────────────────
-        Top Row (Height: 320px):
-          [Module 1: Title]       -> col-span-8
-          [Module 2: Records]     -> col-span-4
-        Bottom Row (Height: 420px):
-          [Module 3: Protocol]    -> col-span-4
-          [Module 4: Begin Slab]  -> col-span-4
-          [Module 5: Modes]       -> col-span-4
-        ─────────────────────────────────────────────
-        Gap: 16px (1rem). Max width: 1280px.
-      */}
+    <>
+      {/* Top-Right Minimal Utility Controls (Audio & Theme) */}
       <div
-        className="bento-container"
         style={{
-          width: '100%',
-          maxWidth: 1280,
-          display: 'grid',
-          gridTemplateColumns: 'repeat(12, 1fr)',
-          gap: '1rem',
-          alignItems: 'stretch',
+          position: 'fixed',
+          top: 32,
+          right: 32,
+          display: 'flex',
+          flexDirection: 'row',
+          alignItems: 'center',
+          gap: 12,
+          pointerEvents: 'auto',
+          zIndex: 70,
         }}
       >
+        <VelocityButton
+          onClick={() => setMuted(!muted)}
+          ariaLabel={muted ? 'Unmute audio' : 'Mute audio'}
+        >
+          {muted ? <VolumeX size={14} /> : <Volume2 size={14} />}
+        </VelocityButton>
+        <VelocityButton
+          onClick={() => setTheme(theme === 'light' ? 'dark' : 'light')}
+          ariaLabel="Toggle theme"
+        >
+          {theme === 'light' ? <Moon size={14} /> : <Sun size={14} />}
+        </VelocityButton>
+      </div>
 
-        {/* ─── MODULE 1: TITLE ─── col-span-8, row 1 (320px) ──────────────────────── */}
-        <Module
-          theme={theme}
+      {/* Main Centered Hero Viewport */}
+      <motion.div
+        initial={{ opacity: 0, y: 12 }}
+        animate={{ opacity: 1, y: 0 }}
+        exit={{ opacity: 0, y: -12 }}
+        transition={{ type: 'spring', stiffness: 240, damping: 24 }}
+        style={{
+          position: 'fixed',
+          inset: 0,
+          zIndex: 60,
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          justifyContent: 'center',
+          padding: '40px 24px',
+          boxSizing: 'border-box',
+          pointerEvents: 'none', // Background grid receives pointer tracking cleanly
+          background: 'transparent',
+        }}
+      >
+        <div
           style={{
-            gridColumn: 'span 8',
-            height: 320,
+            pointerEvents: 'auto',
             display: 'flex',
             flexDirection: 'column',
-            justifyContent: 'space-between',
+            alignItems: 'center',
+            textAlign: 'center',
+            width: '100%',
+            maxWidth: '896px', // max-w-4xl
           }}
         >
-          <div>
-            {/* Top meta row */}
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-              <span style={{ fontSize: 10, letterSpacing: '0.28em', color: '#C5A059' }}>
-                [ SPATIAL_TYPING_ENGINE ]
-              </span>
-              <span style={{ fontSize: 10, letterSpacing: '0.15em', color: txt, opacity: 0.55 }}>
-                VECTOR_01 // STABILIZED
-              </span>
-            </div>
+          {/* 1. Title: 'V E L O C I T Y' in Cormorant Garamond italic with proximity variable weight */}
+          <VariableTitle mousePos={mousePos} size="hero" theme={theme} />
 
-            {/* Variable-weight title */}
-            <VariableTitle mousePos={mousePos} />
+          {/* 2. Caption: Calibrated Monospace Subhead */}
+          <p
+            style={{
+              fontFamily: "'JetBrains Mono', monospace",
+              fontSize: '14px',
+              color: secondaryTextColor,
+              letterSpacing: '0.04em',
+              marginTop: '16px',
+              marginBottom: '28px',
+              maxWidth: '580px',
+              lineHeight: 1.6,
+              userSelect: 'none',
+            }}
+          >
+            A 2D spatial typing engine. Aim with your mouse, strike with your keys.
+          </p>
 
-            {/* Italic tagline */}
-            <div style={{
-              fontFamily: "'Cormorant Garamond', serif",
-              fontStyle: 'italic',
-              fontSize: 15,
-              color: '#C5A059',
-              marginTop: 8,
-              opacity: 0.85,
-              letterSpacing: '0.02em',
-            }}>
-              Spatial precision. Kinetic intent.
-            </div>
-          </div>
-
-          {/* Config toolbar */}
-          <div style={{
-            display: 'flex',
-            gap: 10,
-            marginTop: 'auto',
-            paddingTop: 16,
-            borderTop: '1px solid rgba(197,160,89,0.35)',
-          }}>
-            <VelocityButton
-              onClick={() => setMuted(!muted)}
-              ariaLabel={muted ? 'Unmute audio' : 'Mute audio'}
-            >
-              {muted ? <VolumeX size={12} /> : <Volume2 size={12} />}
-              <span>{muted ? 'MUTED' : 'AUDIO_ON'}</span>
-            </VelocityButton>
-
-            <VelocityButton
-              onClick={() => setTheme(theme === 'light' ? 'dark' : 'light')}
-              ariaLabel="Toggle color theme"
-            >
-              <Moon size={12} />
-              <span>{theme.toUpperCase()}_MODE</span>
-            </VelocityButton>
-
-            <VelocityButton
-              className={showLeaderboard ? 'active' : ''}
-              onClick={() => setShowLeaderboard(!showLeaderboard)}
-              ariaLabel="Toggle leaderboard"
-              style={{ marginLeft: 'auto' }}
-            >
-              <span>[ ARCHIVE ]</span>
-            </VelocityButton>
-          </div>
-        </Module>
-
-        {/* ─── MODULE 2: RECORDS ─── col-span-4, row 1 (320px) ───────────────────── */}
-        <Module
-          theme={theme}
-          style={{
-            gridColumn: 'span 4',
-            height: 320,
-            display: 'flex',
-            flexDirection: 'column',
-          }}
-        >
-          <ModuleTag>[ RECORD_ARCHIVE ]</ModuleTag>
-
-          {showLeaderboard ? (
-            <table style={{ width: '100%', fontSize: 11, borderCollapse: 'collapse', color: txt, flex: 1 }}>
-              <thead>
-                <tr style={{ borderBottom: '1px solid #C5A059' }}>
-                  <th style={{ textAlign: 'left', padding: '5px 0', color: '#C5A059', fontWeight: 600 }}>MODE</th>
-                  <th style={{ textAlign: 'left', padding: '5px 0', color: '#C5A059', fontWeight: 600 }}>SCORE</th>
-                  <th style={{ textAlign: 'left', padding: '5px 0', color: '#C5A059', fontWeight: 600 }}>WPM</th>
-                  <th style={{ textAlign: 'left', padding: '5px 0', color: '#C5A059', fontWeight: 600 }}>ACC</th>
-                </tr>
-              </thead>
-              <tbody>
-                {getLeaderboardData().length === 0 ? (
-                  <tr>
-                    <td colSpan={4} style={{ padding: '14px 0', opacity: 0.4, fontSize: 10 }}>
-                      NO SESSION RECORDS
-                    </td>
-                  </tr>
-                ) : (
-                  getLeaderboardData().slice(0, 5).map((entry, idx) => (
-                    <tr key={idx} style={{ borderBottom: '1px solid rgba(197,160,89,0.2)' }}>
-                      <td style={{ padding: '7px 0', color: '#C5A059' }}>{entry.mode.toUpperCase()}</td>
-                      <td style={{ color: txt, fontWeight: 600 }}>{entry.score}</td>
-                      <td style={{ color: txt }}>{entry.wpm}</td>
-                      <td style={{ color: txt }}>{entry.accuracy}%</td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          ) : (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 10, flex: 1 }}>
-              {(['Chrono', 'Overdrive', 'Zen'] as GameMode[]).map((mode) => (
-                <div
+          {/* 3. Mode Selector with Framer Motion layoutId="activeIndicator" */}
+          <div
+            className="landing-mode-selector"
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '6px',
+              padding: '4px',
+              border: `1px solid ${isLight ? 'rgba(154, 118, 46, 0.25)' : 'rgba(197, 160, 89, 0.25)'}`,
+              background: isLight ? 'rgba(250, 247, 242, 0.90)' : 'rgba(0, 0, 0, 0.75)',
+              borderRadius: 0,
+              position: 'relative',
+            }}
+          >
+            {modes.map((mode) => {
+              const isActive = gameMode === mode;
+              return (
+                <button
                   key={mode}
+                  type="button"
+                  onClick={() => setGameMode(mode)}
                   style={{
-                    display: 'flex',
-                    justifyContent: 'space-between',
-                    alignItems: 'center',
-                    padding: '9px 14px',
-                    border: '1px solid rgba(197,160,89,0.4)',
-                    fontSize: 11,
+                    position: 'relative',
+                    fontFamily: "'JetBrains Mono', monospace",
+                    fontSize: '12px',
+                    fontWeight: isActive ? 700 : 500,
+                    letterSpacing: '0.16em',
+                    textTransform: 'uppercase',
+                    color: isActive ? goldColor : secondaryTextColor,
+                    background: 'transparent',
+                    border: 'none',
+                    borderRadius: 0,
+                    padding: '8px 18px',
+                    cursor: 'pointer',
+                    outline: 'none',
+                    transition: 'color 0.2s ease',
                   }}
                 >
-                  <span style={{ color: '#C5A059', opacity: 0.7 }}>PB {mode.toUpperCase()}:</span>
-                  <span style={{ fontWeight: 700, color: '#C5A059' }}>
-                    {scores[mode] || 0} PTS
+                  {/* Smooth sliding active indicator */}
+                  {isActive && (
+                    <motion.div
+                      layoutId="activeIndicator"
+                      transition={{ type: 'spring', stiffness: 420, damping: 28 }}
+                      style={{
+                        position: 'absolute',
+                        inset: 0,
+                        border: `1px solid ${goldColor}`,
+                        background: isLight ? 'rgba(154, 118, 46, 0.12)' : 'rgba(197, 160, 89, 0.14)',
+                        boxShadow: isLight
+                          ? '0 0 12px rgba(154, 118, 46, 0.25)'
+                          : '0 0 14px rgba(197, 160, 89, 0.35)',
+                        borderRadius: 0,
+                        zIndex: 0,
+                      }}
+                    />
+                  )}
+                  <span style={{ position: 'relative', zIndex: 1 }}>
+                    [ {mode.toUpperCase()} ]
                   </span>
-                </div>
-              ))}
-              <div style={{ marginTop: 'auto', fontSize: 10, opacity: 0.4, color: txt, lineHeight: 1.6 }}>
-                MOTOR_MEMORY: ACTIVE<br />
-                PROXIMITY_LOCK: 240PX RADIUS
-              </div>
-            </div>
-          )}
-        </Module>
-
-        {/* ─── MODULE 3: PROTOCOL ─── col-span-4, row 2 (420px) ───────────────────── */}
-        <Module
-          theme={theme}
-          className="bottom-row-module protocol-module"
-          style={{
-            gridColumn: 'span 4',
-            height: 420,
-            display: 'flex',
-            flexDirection: 'column',
-            justifyContent: 'flex-start',
-          }}
-          noHover
-        >
-          <ModuleTag>[ 00_PROTOCOL ]</ModuleTag>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-            {[
-              '01_LOCATE: ALIGN CURSOR TO NODE RADIUS',
-              '02_CALIBRATE: GILD CHARACTERS VIA INPUT',
-              '03_VELOCITY: MAINTAIN SYNERGY FOR KINETIC STREAK',
-            ].map((line) => (
-              <div
-                key={line}
-                className="protocol-item"
-                style={{
-                  fontSize: 10,
-                  lineHeight: 1.6,
-                  color: txt,
-                  letterSpacing: '0.12em',
-                  fontFamily: "'JetBrains Mono', monospace",
-                  opacity: 0.85,
-                  borderLeft: '1px solid rgba(197,160,89,0.5)',
-                  paddingLeft: 12,
-                }}
-              >
-                {line}
-              </div>
-            ))}
+                </button>
+              );
+            })}
           </div>
-          {/* Status strip top-aligned in lower flow space */}
-          <div style={{ marginTop: 24, paddingTop: 16, borderTop: '1px solid rgba(197,160,89,0.25)', fontSize: 10, opacity: 0.45, color: txt, letterSpacing: '0.1em' }}>
-            STATUS: CALIBRATED — PRESS ENTER TO COMMENCE
-          </div>
-        </Module>
 
-        {/* ─── MODULE 4: BEGIN SESSION (GOLD SLAB) ── col-span-4, row 2 (420px) ───── */}
-        <Module
-          theme={theme}
-          className="begin-session-slab bottom-row-module"
-          style={{
-            gridColumn: 'span 4',
-            height: 420,
-            display: 'flex',
-            flexDirection: 'column',
-            justifyContent: 'space-between',
-          }}
-          noHover
-        >
-          {/* Solid Gold Slab Button - Center Fix */}
-          <button
-            onClick={onBeginSession}
-            onMouseEnter={() => setIsBeginHovered(true)}
-            onMouseLeave={() => setIsBeginHovered(false)}
-            className="begin-session-btn"
+          {/* 4. Animated Single-Line Dynamic Subtitle directly beneath mode buttons */}
+          <div
             style={{
-              flex: 1,
-              width: '100%',
-              fontSize: 14,
-              letterSpacing: '0.2em',
-              fontWeight: 800,
+              height: '24px',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              textAlign: 'center',
-              flexDirection: 'column',
-              gap: 12,
-              cursor: 'pointer',
-              border: '1px solid #C5A059',
-              background: '#C5A059',
-              color: '#000000',
-              boxSizing: 'border-box',
-              outline: 'none',
-              fontFamily: "'JetBrains Mono', monospace",
+              marginTop: '12px',
+              marginBottom: '32px',
             }}
           >
-            <span style={{ fontSize: 26, fontWeight: 800, letterSpacing: '0.15em', lineHeight: 1 }}>▶</span>
-            <span style={{ display: 'inline-block', lineHeight: 1 }}>[ BEGIN_SESSION ]</span>
-          </button>
-
-          {/* Localized Footer directly underneath the Begin Session slab */}
-          <div style={{
-            marginTop: 16,
-            paddingTop: 12,
-            borderTop: '1px solid rgba(197,160,89,0.3)',
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'center',
-            fontSize: 10,
-            letterSpacing: '0.2em',
-            color: isBeginHovered ? '#C5A059' : txt,
-            opacity: isBeginHovered ? 1 : 0.6,
-            transition: 'color 0.25s ease, opacity 0.25s ease, text-shadow 0.25s ease',
-            textShadow: isBeginHovered ? '0 0 10px rgba(197,160,89,0.65)' : 'none',
-            userSelect: 'none',
-          }}>
-            <span>01_AIM</span>
-            <span style={{ opacity: 0.4 }}>//</span>
-            <span>02_TYPE</span>
-            <span style={{ opacity: 0.4 }}>//</span>
-            <span>03_FLOW</span>
-          </div>
-        </Module>
-
-        {/* ─── MODULE 5: MODES ─── col-span-4, row 2 (420px) ──────────────────────── */}
-        <Module
-          theme={theme}
-          className="bottom-row-module"
-          style={{
-            gridColumn: 'span 4',
-            height: 420,
-            display: 'flex',
-            flexDirection: 'column',
-            justifyContent: 'flex-start',
-          }}
-        >
-          <ModuleTag>[ MODE_CALIBRATION ]</ModuleTag>
-
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-            {(['Chrono', 'Overdrive', 'Zen'] as GameMode[]).map((mode) => (
-              <motion.button
-                key={mode}
-                onClick={() => setGameMode(mode)}
-                whileTap={{ scale: 0.98 }}
+            <AnimatePresence mode="wait">
+              <motion.p
+                key={gameMode}
+                initial={{ opacity: 0, y: 6 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -6 }}
+                transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
                 style={{
-                  border: `1px solid ${gameMode === mode ? '#C5A059' : 'rgba(197,160,89,0.35)'}`,
-                  borderRadius: 0,
-                  background: gameMode === mode ? 'rgba(197,160,89,0.12)' : 'transparent',
-                  padding: '14px 18px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'space-between',
-                  cursor: 'pointer',
                   fontFamily: "'JetBrains Mono', monospace",
-                  fontSize: 11,
-                  letterSpacing: '0.12em',
-                  textTransform: 'uppercase',
-                  color: gameMode === mode ? '#C5A059' : txt,
-                  transition: 'all 0.18s ease',
+                  fontSize: '13px',
+                  color: secondaryTextColor,
+                  letterSpacing: '0.02em',
+                  margin: 0,
+                  whiteSpace: 'nowrap',
+                  textAlign: 'center',
+                  userSelect: 'none',
                 }}
               >
-                <span style={{ fontWeight: gameMode === mode ? 700 : 400 }}>{mode}</span>
-                <span style={{ opacity: 0.5, fontSize: 10 }}>
-                  {mode === 'Chrono' ? '60S' : mode === 'Overdrive' ? '+TIME' : '∞'}
-                </span>
-              </motion.button>
+                {modeCaptions[gameMode]}
+              </motion.p>
+            </AnimatePresence>
+          </div>
+
+          {/* 5. Primary CTA: Solid Gold slab, black text, radiant bloom hover & spring press */}
+          <motion.button
+            type="button"
+            onClick={onBeginSession}
+            onMouseEnter={() => setIsCtaHovered(true)}
+            onMouseLeave={() => setIsCtaHovered(false)}
+            whileHover={{
+              scale: 1.02,
+              boxShadow: isLight
+                ? '0 0 20px rgba(154, 118, 46, 0.60), 0 0 45px rgba(154, 118, 46, 0.40), 0 0 80px rgba(154, 118, 46, 0.25), 0 0 120px rgba(154, 118, 46, 0.15)'
+                : '0 0 20px rgba(197, 160, 89, 0.65), 0 0 45px rgba(197, 160, 89, 0.45), 0 0 80px rgba(197, 160, 89, 0.30), 0 0 120px rgba(197, 160, 89, 0.18)',
+            }}
+            whileTap={{ scale: 0.97 }}
+            transition={{ type: 'spring', stiffness: 480, damping: 24 }}
+            className="landing-primary-cta"
+            style={{
+              position: 'relative',
+              fontFamily: "'JetBrains Mono', monospace",
+              fontSize: '13.5px',
+              fontWeight: 800,
+              letterSpacing: '0.22em',
+              textTransform: 'uppercase',
+              background: goldColor, // Solid Gold slab (#C5A059 dark / #9A762E light)
+              color: '#000000', // Black text
+              border: `1px solid ${goldColor}`,
+              borderRadius: 0,
+              padding: '16px 46px',
+              cursor: 'pointer',
+              outline: 'none',
+              marginBottom: '46px',
+              display: 'inline-flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              boxShadow: isLight
+                ? '0 0 12px rgba(154, 118, 46, 0.25)'
+                : '0 0 12px rgba(197, 160, 89, 0.25)',
+              transition: 'background-color 0.3s ease, border-color 0.3s ease',
+            }}
+          >
+            [ BEGIN SESSION ]
+          </motion.button>
+
+          {/* 6. Guide Cards: Staggered entrance, hover spring lift (y: -4px) & 100% Gold border brightening */}
+          <motion.div
+            variants={cardsContainerVariants}
+            initial="hidden"
+            animate="show"
+            className="landing-step-grid"
+            style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(3, 1fr)',
+              gap: '16px',
+              width: '100%',
+              maxWidth: '896px',
+              boxSizing: 'border-box',
+            }}
+          >
+            {steps.map((step) => (
+              <motion.div
+                key={step.title}
+                variants={cardItemVariants}
+                whileHover={{
+                  y: -4,
+                  borderColor: goldColor, // Brightens to 100% Gold
+                  boxShadow: isLight
+                    ? '0 8px 24px rgba(154, 118, 46, 0.18)'
+                    : '0 8px 24px rgba(197, 160, 89, 0.20)',
+                  transition: { type: 'spring', stiffness: 400, damping: 20 },
+                }}
+                className="landing-step-card"
+                style={{
+                  border: `1px solid ${cardBorderIdle}`,
+                  borderRadius: 0,
+                  background: cardBgColor,
+                  padding: '24px 22px',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '10px',
+                  textAlign: 'left',
+                  boxSizing: 'border-box',
+                  position: 'relative',
+                  cursor: 'default',
+                  transition: 'border-color 0.25s ease, background-color 0.3s ease',
+                }}
+              >
+                <div
+                  style={{
+                    fontFamily: "'JetBrains Mono', monospace",
+                    fontSize: '11px',
+                    fontWeight: 700,
+                    letterSpacing: '0.18em',
+                    color: goldColor,
+                    textTransform: 'uppercase',
+                  }}
+                >
+                  {step.title}
+                </div>
+                <div
+                  style={{
+                    fontFamily: "'JetBrains Mono', monospace",
+                    fontSize: '13px',
+                    lineHeight: 1.6,
+                    color: isLight ? primaryTextColor : '#FDFDFB',
+                    opacity: isLight ? 0.92 : 0.85,
+                    fontWeight: 400,
+                  }}
+                >
+                  {step.description}
+                </div>
+              </motion.div>
             ))}
-          </div>
+          </motion.div>
+        </div>
+      </motion.div>
 
-          {/* Mode description top-aligned underneath modes */}
-          <div style={{
-            marginTop: 16,
-            padding: '12px 14px',
-            border: '1px solid rgba(197,160,89,0.3)',
-            fontSize: 10,
-            lineHeight: 1.6,
-            color: txt,
-            opacity: 0.7,
-            letterSpacing: '0.08em',
-          }}>
-            {modeDesc[gameMode]}
-          </div>
-        </Module>
-
-      </div>
-
-      {/* Project Signature */}
-      <div className="project-signature">
+      {/* 7. Footer: Anchored to fixed bottom-4 at 25% opacity */}
+      <div
+        className="fixed-footer-signature"
+        style={{
+          position: 'fixed',
+          bottom: '16px', // fixed bottom-4
+          left: '50%',
+          transform: 'translateX(-50%)',
+          fontFamily: "'JetBrains Mono', monospace",
+          fontSize: '10px',
+          letterSpacing: '0.2em',
+          color: isLight ? '#1E1C19' : '#FDFDFB',
+          opacity: 0.25,
+          userSelect: 'none',
+          pointerEvents: 'auto',
+          zIndex: 70,
+          transition: 'opacity 0.3s ease, color 0.3s ease',
+        }}
+      >
         TARUN_TOM // 2026
       </div>
-    </motion.div>
+    </>
   );
 };
-

@@ -819,7 +819,7 @@ function App() {
             <div className="active-hud-overlay">
               {/* Top-Left: Proximity Variable Title */}
               <div className="hud-logo-container">
-                <VariableTitle mousePos={mousePos} onClick={triggerGameOver} />
+                <VariableTitle mousePos={mousePos} onClick={triggerGameOver} theme={theme} />
               </div>
 
               {/* Top-Right: Game controls */}

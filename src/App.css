@@ -19,13 +19,15 @@ body.dark-theme {
 }
 
 body.light-theme {
-  /* In light mode the 'negative' telemetry text must read as Graphite, not Bone White */
-  --theme-color: #333333;
-  --bg-color: #FDFDFB;
-  --border-idle: #C5A059; /* Strictly Gold 1px border */
-  --border-hover: #C5A059;
-  /* Light-mode button hover: Graphite 5% instead of Gold tint */
-  --gold-kinetic-fill: rgba(51, 51, 51, 0.05);
+  --theme-color: #1E1C19;
+  --text-primary: #1E1C19;
+  --text-secondary: #5C5750;
+  --bg-color: #FAF7F2; /* Warm Antique Cream */
+  --gold-accent: #9A762E; /* Burnished Antique Brass */
+  --border-idle: #9A762E;
+  --border-hover: #9A762E;
+  --gold-tint: rgba(154, 118, 46, 0.12);
+  --gold-kinetic-fill: rgba(30, 28, 25, 0.05);
   background-color: var(--bg-color);
   color: var(--theme-color);
 }
@@ -38,7 +40,7 @@ body.light-theme {
   pointer-events: none;
 }
 
-/* Architectural Viewfinder Corner Brackets — Strictly Gold (#C5A059) 1px solid */
+/* Architectural Viewfinder Corner Brackets */
 .corner-bracket {
   position: fixed;
   width: 16px;
@@ -46,40 +48,43 @@ body.light-theme {
   opacity: 0.6;
   pointer-events: none;
   z-index: 100;
+  border-color: var(--gold-accent, #C5A059) !important;
+}
+
+body.dark-theme .corner-bracket {
   border-color: #C5A059 !important;
 }
 
-body.dark-theme .corner-bracket,
 body.light-theme .corner-bracket {
-  border-color: #C5A059 !important;
+  border-color: #9A762E !important;
 }
 
 .corner-bracket.top-left {
   top: 32px;
   left: 32px;
-  border-top: 1px solid #C5A059 !important;
-  border-left: 1px solid #C5A059 !important;
+  border-top: 1px solid currentColor !important;
+  border-left: 1px solid currentColor !important;
 }
 
 .corner-bracket.top-right {
   top: 32px;
   right: 32px;
-  border-top: 1px solid #C5A059 !important;
-  border-right: 1px solid #C5A059 !important;
+  border-top: 1px solid currentColor !important;
+  border-right: 1px solid currentColor !important;
 }
 
 .corner-bracket.bottom-left {
   bottom: 32px;
   left: 32px;
-  border-bottom: 1px solid #C5A059 !important;
-  border-left: 1px solid #C5A059 !important;
+  border-bottom: 1px solid currentColor !important;
+  border-left: 1px solid currentColor !important;
 }
 
 .corner-bracket.bottom-right {
   bottom: 32px;
   right: 32px;
-  border-bottom: 1px solid #C5A059 !important;
-  border-right: 1px solid #C5A059 !important;
+  border-bottom: 1px solid currentColor !important;
+  border-right: 1px solid currentColor !important;
 }
 
 /* ACTIVE HUD OVERLAY */
@@ -387,9 +392,10 @@ body.light-theme .stat-label {
 }
 
 /* Project Signature — Impeccable Ghost Signature Calibration */
-.project-signature {
+.project-signature,
+.fixed-footer-signature {
   position: fixed;
-  bottom: 20px;
+  bottom: 16px;
   left: 50%;
   transform: translateX(-50%);
   font-family: 'JetBrains Mono', monospace;
@@ -399,11 +405,53 @@ body.light-theme .stat-label {
   opacity: 0.25;
   pointer-events: auto;
   user-select: none;
-  z-index: 60;
-  transition: color 0.5s ease-out, opacity 0.5s ease-out;
+  z-index: 70;
+  transition: color 0.35s ease-out, opacity 0.35s ease-out;
 }
 
-.project-signature:hover {
+.project-signature:hover,
+.fixed-footer-signature:hover {
   color: #C5A059;
-  opacity: 0.8;
+  opacity: 0.85;
+}
+
+body.light-theme .project-signature,
+body.light-theme .fixed-footer-signature {
+  color: #1E1C19;
+  opacity: 0.25;
+}
+
+body.light-theme .project-signature:hover,
+body.light-theme .fixed-footer-signature:hover {
+  color: #9A762E;
+  opacity: 0.85;
+}
+
+body.light-theme .velocity-btn {
+  border-color: #9A762E !important;
+  color: #9A762E !important;
+}
+
+body.light-theme .velocity-btn:hover,
+body.light-theme .velocity-btn.hovered {
+  border-color: #9A762E !important;
+  color: #9A762E !important;
+  background-color: rgba(154, 118, 46, 0.10) !important;
+}
+
+/* Landing Page 3 Step Cards & Primary CTA */
+.landing-step-card:hover {
+  border-color: rgba(197, 160, 89, 0.4) !important;
+  box-shadow: 0 0 16px rgba(197, 160, 89, 0.12);
+}
+
+body.light-theme .landing-step-card:hover {
+  border-color: #9A762E !important;
+  box-shadow: 0 6px 20px rgba(154, 118, 46, 0.14) !important;
+}
+
+@media (max-width: 860px) {
+  .landing-step-grid {
+    grid-template-columns: 1fr !important;
+  }
 }

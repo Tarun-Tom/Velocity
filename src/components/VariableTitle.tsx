@@ -5,12 +5,16 @@ interface VariableTitleProps {
   mousePos: { x: number; y: number };
   onClick?: () => void;
   className?: string;
+  size?: 'hero' | 'hud';
+  theme?: 'light' | 'dark';
 }
 
 export const VariableTitle: React.FC<VariableTitleProps> = ({
   mousePos,
   onClick,
   className = '',
+  size = 'hud',
+  theme = 'dark',
 }) => {
   const titleRef = useRef<HTMLDivElement>(null);
 
@@ -18,7 +22,7 @@ export const VariableTitle: React.FC<VariableTitleProps> = ({
 
   // ── Liquid Glass Spring ────────────────────────────────────────────────────
   // stiffness: 40, damping: 20 → the title weight moves like heavy glass —
-  // slow to start, slow to settle. A continuous breathing between Thin and Bold
+  // slow to start, slow to settle. A continuous breathing between Light and Bold
   // that tracks the cursor without snapping.
   const smoothProximity = useSpring(rawProximity, {
     stiffness: 40,
@@ -26,20 +30,36 @@ export const VariableTitle: React.FC<VariableTitleProps> = ({
     mass: 1.4,
   });
 
-  const fontWeight = useTransform(smoothProximity, [0, 1], [100, 900]);
+  const isHero = size === 'hero';
+  const isLight = theme === 'light';
+
+  // Light mode: Burnished Antique Brass (#9A762E) with high contrast on cream
+  // Dark mode:  Gold (#C5A059)
+  const goldColor = isLight ? '#9A762E' : '#C5A059';
+
+  // Cormorant Garamond weights 300 (Light) to 700 (Bold)
+  const fontWeight = useTransform(smoothProximity, [0, 1], [300, 700]);
 
   const fontVariationSettings = useTransform(
     smoothProximity,
-    (v) => `'wght' ${Math.round(100 + v * 800)}`
+    (v) => `'wght' ${Math.round(300 + v * 400)}`
   );
 
-  // Tracking compresses as weight grows — mirrors natural type behavior
-  const letterSpacing = useTransform(smoothProximity, [0, 1], ['0.38em', '0.10em']);
+  // Tracking compresses slightly as weight grows
+  const letterSpacing = useTransform(
+    smoothProximity,
+    [0, 1],
+    isHero ? ['0.28em', '0.18em'] : ['0.20em', '0.12em']
+  );
 
-  // Gold glow breathes in with the weight — subtle at low proximity, strong at peak
+  // Gold glow breathes in with the weight — subtle at low proximity, radiant at peak
   const textShadow = useTransform(smoothProximity, (v) =>
-    v > 0.1
-      ? `0 0 ${Math.round(v * 22)}px rgba(197, 160, 89, ${(v * 0.7).toFixed(2)})`
+    v > 0.08
+      ? `0 0 ${Math.round(v * (isHero ? 32 : 18))}px ${
+          isLight
+            ? `rgba(154, 118, 46, ${(v * 0.70).toFixed(2)})`
+            : `rgba(197, 160, 89, ${(v * 0.75).toFixed(2)})`
+        }`
       : 'none'
   );
 
@@ -58,14 +78,13 @@ export const VariableTitle: React.FC<VariableTitleProps> = ({
     const dy = mousePos.y - centerY;
     const dist = Math.sqrt(dx * dx + dy * dy);
 
-    const maxDist = 380;
+    const maxDist = isHero ? 480 : 360;
     const proximity = Math.max(0, Math.min(1, 1 - dist / maxDist));
 
-    // Exponent 1.5 — gradual onset, stronger as you get close
-    const smoothFactor = Math.pow(proximity, 1.5);
+    // Exponent 1.4 — gradual onset, stronger as you get close
+    const smoothFactor = Math.pow(proximity, 1.4);
     rawProximity.set(smoothFactor);
-  }, [mousePos, rawProximity]);
-
+  }, [mousePos, rawProximity, isHero]);
 
   return (
     <motion.div
@@ -73,17 +92,20 @@ export const VariableTitle: React.FC<VariableTitleProps> = ({
       onClick={onClick}
       className={`variable-title ${className}`}
       style={{
-        fontFamily: "'JetBrains Mono', monospace",
-        fontSize: '28px',
+        fontFamily: "'Cormorant Garamond', Georgia, serif",
+        fontStyle: 'italic',
+        fontSize: isHero ? 'clamp(44px, 6vw, 76px)' : '24px',
         fontWeight,
         fontVariationSettings,
         letterSpacing,
         textShadow,
-        color: '#C5A059', // Strictly Gold for Main Title
+        color: goldColor, // #9A762E in light mode, #C5A059 in dark mode
         textTransform: 'uppercase',
-        lineHeight: 1,
+        lineHeight: 1.1,
         cursor: onClick ? 'pointer' : 'default',
         userSelect: 'none',
+        textAlign: 'center',
+        display: 'inline-block',
       }}
     >
       V E L O C I T Y

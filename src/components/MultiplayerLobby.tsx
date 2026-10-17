@@ -194,37 +194,62 @@ export const MultiplayerLobby: React.FC<MultiplayerLobbyProps> = ({
       }
     };
 
+    // Synchronize presence roster from current channel presence state
+    const syncRoster = () => {
+      const roster = parsePresenceRoster(safePresence());
+      if (roster.length > 0) {
+        setPlayers(roster);
+        currentPlayersRef.current = roster;
+      } else if (existingPlayers && existingPlayers.length > 0) {
+        setPlayers(existingPlayers);
+        currentPlayersRef.current = existingPlayers;
+      }
+    };
+
     // Initial safe sync from existing channel presence
-    const initialRoster = parsePresenceRoster(safePresence());
-    if (initialRoster.length > 0) {
-      setPlayers(initialRoster);
-      currentPlayersRef.current = initialRoster;
-    } else if (existingPlayers && existingPlayers.length > 0) {
-      setPlayers(existingPlayers);
-      currentPlayersRef.current = existingPlayers;
+    syncRoster();
+
+    // Re-affirm local presence state if needed
+    try {
+      if (callsign) {
+        existingChannel.track({
+          callsign,
+          isHost: isHostUser ?? false,
+          joinedAt: Date.now(),
+          status: 'SYNCHRONIZED',
+        }).catch?.(() => {});
+      }
+    } catch {
+      // Safe guard against untracked channel
     }
 
-    existingChannel
-      .on('presence', { event: 'sync' }, () => {
-        const roster = parsePresenceRoster(safePresence());
-        if (roster.length > 0) {
-          setPlayers(roster);
-          currentPlayersRef.current = roster;
-        }
-      })
-      .on('broadcast', { event: 'GAME_START' }, ({ payload }) => {
-        if (onLaunchGame && channelRef.current) {
-          isHandingOverRef.current = true;
-          onLaunchGame({
-            seed: payload.seed,
-            hostCallsign: payload.hostCallsign,
-            roomCode: initialRoomCode || roomCode,
-            channel: channelRef.current,
-            callsign,
-            players: currentPlayersRef.current.length > 0 ? currentPlayersRef.current : [{ callsign, isHost: false, joinedAt: Date.now(), status: 'SYNCHRONIZED' }],
-          });
-        }
-      });
+    // Periodically poll channel's in-memory presence state (no new presence callback added, preventing Supabase after-subscribe crash)
+    const syncInterval = setInterval(syncRoster, 500);
+
+    // Broadcast: Listen for next GAME_START on existing channel safely (broadcast is allowed after subscribe)
+    const handleGameStart = ({ payload }: { payload: any }) => {
+      if (payload && payload.seed !== undefined && onLaunchGame && channelRef.current) {
+        isHandingOverRef.current = true;
+        onLaunchGame({
+          seed: payload.seed,
+          hostCallsign: payload.hostCallsign,
+          roomCode: initialRoomCode || roomCode,
+          channel: channelRef.current,
+          callsign,
+          players: currentPlayersRef.current.length > 0 ? currentPlayersRef.current : [{ callsign, isHost: Boolean(isHostUser), joinedAt: Date.now(), status: 'SYNCHRONIZED' }],
+        });
+      }
+    };
+
+    try {
+      existingChannel.on('broadcast', { event: 'GAME_START' }, handleGameStart);
+    } catch (err) {
+      console.warn('[LOBBY GAME_START BINDING WARN]', err);
+    }
+
+    return () => {
+      clearInterval(syncInterval);
+    };
   }, [existingChannel, initialRoomCode, isHostUser, existingPlayers, parsePresenceRoster, onLaunchGame, callsign, roomCode]);
 
   // ── Realtime Room Connection Logic ─────────────────────────────────────────

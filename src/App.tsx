@@ -975,9 +975,64 @@ function App() {
     if (momentumBarRef.current) momentumBarRef.current.style.width = '0%';
   }, [multiplayerChannel]);
 
+  const lastLaunchSeedRef = useRef<number | null>(null);
+
+  // ── Multiplayer Launch Handler ─────────────────────────────────────────────
+  const handleMultiplayerLaunch = useCallback((payload: MultiplayerLaunchPayload) => {
+    if (lastLaunchSeedRef.current === payload.seed) return;
+    lastLaunchSeedRef.current = payload.seed;
+
+    setCurrentView('mp-game');
+    setIsMultiplayerHost(payload.hostCallsign === payload.callsign);
+    setMultiplayerRoomCode(payload.roomCode);
+    setMultiplayerCallsign(payload.callsign);
+    setMultiplayerChannel(payload.channel);
+    setMultiplayerPlayers(payload.players);
+    setOpponentCursors({});
+    setOpponentScores({});
+    setOpponentFinishResults({});
+    setGameMode('Chrono');
+
+    // Deterministic seeding for identical words and coordinates!
+    initializeGame(payload.seed);
+
+    // 3-Second Synchronized Countdown
+    setMultiplayerCountdown(3);
+    if (!muted) audioController.playClick();
+
+    let count = 3;
+    const timer = setInterval(() => {
+      count -= 1;
+      if (count > 0) {
+        setMultiplayerCountdown(count);
+        if (!muted) audioController.playClick();
+      } else if (count === 0) {
+        setMultiplayerCountdown(0); // "ENGAGE"
+        if (!muted) audioController.playThud();
+      } else {
+        clearInterval(timer);
+        setMultiplayerCountdown(null);
+      }
+    }, 1000);
+  }, [muted]);
+
   // ── Multiplayer Realtime Channel Broadcast Listeners ───────────────────────
   useEffect(() => {
     if (!multiplayerChannel) return;
+
+    // 0. Synchronized Match Launch (Session 2+ peer sync)
+    multiplayerChannel.on('broadcast', { event: 'GAME_START' }, ({ payload }) => {
+      if (payload && payload.seed !== undefined) {
+        handleMultiplayerLaunch({
+          seed: payload.seed,
+          hostCallsign: payload.hostCallsign,
+          roomCode: payload.roomCode || multiplayerRoomCode || 'ARENA',
+          channel: multiplayerChannel,
+          callsign: multiplayerCallsign,
+          players: multiplayerPlayers,
+        });
+      }
+    });
 
     // 1. Ghost Cursor Moves
     multiplayerChannel.on('broadcast', { event: 'CURSOR_MOVE' }, ({ payload }) => {
@@ -1027,7 +1082,7 @@ function App() {
     multiplayerChannel.on('broadcast', { event: 'RETURN_LOBBY' }, () => {
       transitionToLobby();
     });
-  }, [multiplayerChannel, multiplayerCallsign, transitionToLobby]);
+  }, [multiplayerChannel, multiplayerCallsign, multiplayerRoomCode, multiplayerPlayers, handleMultiplayerLaunch, transitionToLobby]);
 
   // ── Stale Ghost Cursors Cleanup ────────────────────────────────────────────
   useEffect(() => {
@@ -1048,42 +1103,6 @@ function App() {
     }, 2000);
     return () => clearInterval(interval);
   }, [isMultiplayer, isPlaying]);
-
-  // ── Multiplayer Launch Handler ─────────────────────────────────────────────
-  const handleMultiplayerLaunch = useCallback((payload: MultiplayerLaunchPayload) => {
-    setCurrentView('mp-game');
-    setIsMultiplayerHost(payload.hostCallsign === payload.callsign);
-    setMultiplayerRoomCode(payload.roomCode);
-    setMultiplayerCallsign(payload.callsign);
-    setMultiplayerChannel(payload.channel);
-    setMultiplayerPlayers(payload.players);
-    setOpponentCursors({});
-    setOpponentScores({});
-    setOpponentFinishResults({});
-    setGameMode('Chrono');
-
-    // Deterministic seeding for identical words and coordinates!
-    initializeGame(payload.seed);
-
-    // 3-Second Synchronized Countdown
-    setMultiplayerCountdown(3);
-    if (!muted) audioController.playClick();
-
-    let count = 3;
-    const timer = setInterval(() => {
-      count -= 1;
-      if (count > 0) {
-        setMultiplayerCountdown(count);
-        if (!muted) audioController.playClick();
-      } else if (count === 0) {
-        setMultiplayerCountdown(0); // "ENGAGE"
-        if (!muted) audioController.playThud();
-      } else {
-        clearInterval(timer);
-        setMultiplayerCountdown(null);
-      }
-    }, 1000);
-  }, [muted]);
 
   // ── Podium Players Roster Memo ─────────────────────────────────────────────
   const podiumPlayersList: PodiumPlayer[] = useMemo(() => {

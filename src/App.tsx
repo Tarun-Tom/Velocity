@@ -54,13 +54,39 @@ function App() {
   const [showLeaderboard, setShowLeaderboard] = useState(false);
   const [muted, setMuted] = useState(false);
 
-  // ── Unified View State Machine (Default: 'landing') ─────────────────────────
-  const [currentView, setCurrentView] = useState<AppView>('landing');
+  // ── 1. URL Query Parameter Detection (?room=VELO-89) ────────────────────────
+  const [initialInviteRoom] = useState<string | null>(() => {
+    if (typeof window === 'undefined') return null;
+    try {
+      const params = new URLSearchParams(window.location.search);
+      const room = params.get('room');
+      return room && room.trim() ? room.trim().toUpperCase() : null;
+    } catch {
+      return null;
+    }
+  });
+
+  // ── Unified View State Machine (Default: 'landing', or 'mp-lobby' if invited) ─
+  const [currentView, setCurrentView] = useState<AppView>(() => (initialInviteRoom ? 'mp-lobby' : 'landing'));
 
   // Diagnostic telemetry log on every view state change
   useEffect(() => {
     console.log('[VELOCITY_VIEW]', currentView);
   }, [currentView]);
+
+  // Clean up URL query parameters after capturing invite room code so address bar stays clean
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    try {
+      const params = new URLSearchParams(window.location.search);
+      if (params.has('room')) {
+        window.history.replaceState({}, '', window.location.pathname);
+        console.log('[VELOCITY_INVITE_CAPTURED] Sanitized browser URL.');
+      }
+    } catch (err) {
+      console.warn('[URL_CLEANUP_WARN]', err);
+    }
+  }, []);
 
   // Derived state flags for internal sub-system synchronization
   const isPlaying = currentView === 'solo-game' || currentView === 'mp-game';
@@ -70,7 +96,7 @@ function App() {
 
   // ── Multiplayer Arena Session State ─────────────────────────────────────────
   const [isMultiplayerHost, setIsMultiplayerHost] = useState<boolean>(false);
-  const [multiplayerRoomCode, setMultiplayerRoomCode] = useState<string | null>(null);
+  const [multiplayerRoomCode, setMultiplayerRoomCode] = useState<string | null>(initialInviteRoom);
   const [multiplayerCallsign, setMultiplayerCallsign] = useState<string>('');
   const [multiplayerChannel, setMultiplayerChannel] = useState<RealtimeChannel | null>(null);
   const [multiplayerPlayers, setMultiplayerPlayers] = useState<PlayerPresence[]>([]);

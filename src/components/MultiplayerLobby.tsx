@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { motion } from 'framer-motion';
 import { supabase, isSupabaseConfigured } from '../lib/supabase';
 import type { RealtimeChannel } from '@supabase/supabase-js';
-import { X, Copy, Check, Users, Radio, Shield } from 'lucide-react';
+import { X, Copy, Check, Users, Radio, Shield, Link2 } from 'lucide-react';
 
 export interface PlayerPresence {
   callsign: string;
@@ -81,18 +81,22 @@ export const MultiplayerLobby: React.FC<MultiplayerLobbyProps> = ({
   };
 
   // ── Room & Realtime Presence State ─────────────────────────────────────────
-  const [roomCode, setRoomCode] = useState<string>(initialRoomCode || '');
-  const [inputRoomCode, setInputRoomCode] = useState<string>('');
+  const [roomCode, setRoomCode] = useState<string>(() => (initialRoomCode ? initialRoomCode.trim().toUpperCase() : ''));
+  const [inputRoomCode, setInputRoomCode] = useState<string>(() => (initialRoomCode ? initialRoomCode.trim().toUpperCase() : ''));
   const [isHost, setIsHost] = useState<boolean>(isHostUser || false);
   const [isConnected, setIsConnected] = useState<boolean>(Boolean(existingChannel && initialRoomCode));
   const [isConnecting, setIsConnecting] = useState<boolean>(false);
   const [connectionError, setConnectionError] = useState<string | null>(null);
   const [players, setPlayers] = useState<PlayerPresence[]>(existingPlayers || []);
   const [copied, setCopied] = useState<boolean>(false);
+  const [copiedLink, setCopiedLink] = useState<boolean>(false);
 
+  const callsignInputRef = useRef<HTMLInputElement>(null);
   const channelRef = useRef<RealtimeChannel | null>(existingChannel || null);
   const isHandingOverRef = useRef<boolean>(false);
   const currentPlayersRef = useRef<PlayerPresence[]>(existingPlayers || []);
+
+  const hasInviteCode = Boolean(initialRoomCode && !isConnected && !existingChannel);
 
   // Safe presence extraction helper with defensive fallback
   const parsePresenceRoster = useCallback((presenceState: any): PlayerPresence[] => {
@@ -332,12 +336,22 @@ export const MultiplayerLobby: React.FC<MultiplayerLobbyProps> = ({
       });
   }, [callsign, existingChannel, onLaunchGame, parsePresenceRoster]);
 
-  // If initialRoomCode was passed without existingChannel, auto-connect
+  // ── Auto-Join Setup for Invited Friends ───────────────────────────────────
   useEffect(() => {
-    if (initialRoomCode && !existingChannel && !isConnected && !isConnecting && !channelRef.current) {
-      connectToRoom(initialRoomCode, false);
+    if (initialRoomCode && !existingChannel && !isConnected) {
+      const sanitized = initialRoomCode.trim().toUpperCase();
+      setInputRoomCode(sanitized);
+
+      // Focus the player's attention on their [ OPERATOR_TAG ] so they can confirm/type their name
+      const timer = setTimeout(() => {
+        if (callsignInputRef.current) {
+          callsignInputRef.current.focus();
+          callsignInputRef.current.select();
+        }
+      }, 150);
+      return () => clearTimeout(timer);
     }
-  }, [initialRoomCode, existingChannel, isConnected, isConnecting, connectToRoom]);
+  }, [initialRoomCode, existingChannel, isConnected]);
 
   // ── Host Room Flow ─────────────────────────────────────────────────────────
   const handleHostRoom = () => {
@@ -384,12 +398,62 @@ export const MultiplayerLobby: React.FC<MultiplayerLobbyProps> = ({
     }
   };
 
-  const handleCopyCode = () => {
+  // ── Robust Multi-Tier Clipboard Copy ───────────────────────────────────────
+  const copyToClipboard = useCallback(async (text: string): Promise<boolean> => {
+    // Tier 1: Modern Async Clipboard API
+    if (typeof navigator !== 'undefined' && navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
+      try {
+        await navigator.clipboard.writeText(text);
+        return true;
+      } catch (err) {
+        console.warn('[CLIPBOARD_API_FAILED]', err);
+      }
+    }
+
+    // Tier 2: Hidden textarea execCommand fallback
+    try {
+      const textArea = document.createElement('textarea');
+      textArea.value = text;
+      textArea.style.position = 'fixed';
+      textArea.style.left = '-999999px';
+      textArea.style.top = '-999999px';
+      textArea.setAttribute('readonly', '');
+      document.body.appendChild(textArea);
+      textArea.focus();
+      textArea.select();
+      const successful = document.execCommand('copy');
+      document.body.removeChild(textArea);
+      if (successful) return true;
+    } catch (err) {
+      console.warn('[EXECCOMMAND_COPY_FAILED]', err);
+    }
+
+    // Tier 3: Interactive Prompt fallback
+    try {
+      window.prompt('Copy invite link to clipboard: (Ctrl+C, Enter)', text);
+      return true;
+    } catch {
+      return false;
+    }
+  }, []);
+
+  const handleCopyCode = async () => {
     if (roomCode) {
-      navigator.clipboard.writeText(roomCode);
+      await copyToClipboard(roomCode);
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     }
+  };
+
+  const handleCopyInviteLink = async () => {
+    if (!roomCode) return;
+    const origin = typeof window !== 'undefined' ? window.location.origin : '';
+    const pathname = typeof window !== 'undefined' ? window.location.pathname.replace(/\/+$/, '') : '';
+    const inviteUrl = `${origin}${pathname}/?room=${encodeURIComponent(roomCode)}`;
+
+    await copyToClipboard(inviteUrl);
+    setCopiedLink(true);
+    setTimeout(() => setCopiedLink(false), 2000);
   };
 
   return (
@@ -518,31 +582,58 @@ export const MultiplayerLobby: React.FC<MultiplayerLobbyProps> = ({
         >
           <div
             style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
               fontSize: '10px',
               letterSpacing: '0.2em',
               color: subtextColor,
               textTransform: 'uppercase',
             }}
           >
-            IDENTIFICATION_VECTOR // OPERATOR TAG (MAX 8 CHARACTERS)
+            <span>IDENTIFICATION_VECTOR // OPERATOR TAG (MAX 8 CHARACTERS)</span>
+            {hasInviteCode && (
+              <span
+                style={{
+                  color: goldColor,
+                  fontWeight: 700,
+                  letterSpacing: '0.15em',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '4px',
+                }}
+              >
+                [!] INVITE_ACTIVE · CONFIRM_TAG
+              </span>
+            )}
           </div>
           <div
             style={{
               display: 'flex',
               alignItems: 'center',
-              border: `1px solid ${borderIdle}`,
+              border: `1px solid ${hasInviteCode ? goldColor : borderIdle}`,
               background: inputBg,
               padding: '12px 16px',
               boxSizing: 'border-box',
+              boxShadow: hasInviteCode
+                ? `0 0 16px ${isLight ? 'rgba(154, 118, 46, 0.2)' : 'rgba(197, 160, 89, 0.25)'}`
+                : 'none',
+              transition: 'all 0.2s ease',
             }}
           >
             <span style={{ color: goldColor, fontWeight: 700, fontSize: '13px', letterSpacing: '0.15em', marginRight: '10px' }}>
               [ OPERATOR_TAG:
             </span>
             <input
+              ref={callsignInputRef}
               type="text"
               value={callsign}
               onChange={handleCallsignChange}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && inputRoomCode.trim() && !isConnected && !isConnecting) {
+                  handleJoinRoom();
+                }
+              }}
               disabled={isConnected || isConnecting}
               maxLength={8}
               placeholder="CALLSIGN"
@@ -643,21 +734,36 @@ export const MultiplayerLobby: React.FC<MultiplayerLobbyProps> = ({
             {/* Join Section */}
             <div
               style={{
-                border: `1px solid ${borderIdle}`,
+                border: `1px solid ${hasInviteCode ? goldColor : borderIdle}`,
                 padding: '24px 20px',
                 display: 'flex',
                 flexDirection: 'column',
                 justifyContent: 'space-between',
-                background: isLight ? 'rgba(30, 28, 25, 0.02)' : 'rgba(253, 253, 251, 0.02)',
+                background: hasInviteCode
+                  ? (isLight ? 'rgba(154, 118, 46, 0.04)' : 'rgba(197, 160, 89, 0.05)')
+                  : (isLight ? 'rgba(30, 28, 25, 0.02)' : 'rgba(253, 253, 251, 0.02)'),
+                boxShadow: hasInviteCode
+                  ? `0 0 20px ${isLight ? 'rgba(154, 118, 46, 0.15)' : 'rgba(197, 160, 89, 0.2)'}`
+                  : 'none',
+                transition: 'all 0.2s ease',
               }}
             >
               <div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: goldColor, fontSize: '12px', fontWeight: 700, letterSpacing: '0.18em', marginBottom: '8px' }}>
-                  <Users size={13} />
-                  02 · JOIN_ARENA
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: goldColor, fontSize: '12px', fontWeight: 700, letterSpacing: '0.18em' }}>
+                    <Users size={13} />
+                    02 · JOIN_ARENA
+                  </div>
+                  {hasInviteCode && (
+                    <span style={{ fontSize: '10px', color: goldColor, fontWeight: 700, letterSpacing: '0.14em' }}>
+                      [ TARGET_ROOM_LOCKED ]
+                    </span>
+                  )}
                 </div>
                 <div style={{ fontSize: '11px', color: subtextColor, lineHeight: 1.5, marginBottom: '14px' }}>
-                  Input 6-character room code from your peer host to synchronize presence.
+                  {hasInviteCode
+                    ? `Synchronize vector with host for invited arena [ ${inputRoomCode} ].`
+                    : 'Input 6-character room code from your peer host to synchronize presence.'}
                 </div>
 
                 <input
@@ -665,13 +771,18 @@ export const MultiplayerLobby: React.FC<MultiplayerLobbyProps> = ({
                   placeholder="CODE (e.g. VELO-42)"
                   value={inputRoomCode}
                   onChange={(e) => setInputRoomCode(e.target.value.toUpperCase())}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && inputRoomCode.trim() && !isConnecting) {
+                      handleJoinRoom();
+                    }
+                  }}
                   disabled={isConnecting}
                   maxLength={10}
                   style={{
                     width: '100%',
                     boxSizing: 'border-box',
                     background: inputBg,
-                    border: `1px solid ${borderIdle}`,
+                    border: `1px solid ${hasInviteCode ? goldColor : borderIdle}`,
                     padding: '8px 12px',
                     fontFamily: "'JetBrains Mono', monospace",
                     fontSize: '12px',
@@ -692,8 +803,8 @@ export const MultiplayerLobby: React.FC<MultiplayerLobbyProps> = ({
                 whileHover={{ scale: 1.02 }}
                 whileTap={{ scale: 0.98 }}
                 style={{
-                  background: 'transparent',
-                  color: goldColor,
+                  background: hasInviteCode ? goldColor : 'transparent',
+                  color: hasInviteCode ? (isLight ? '#FAF7F2' : '#000000') : goldColor,
                   border: `1px solid ${goldColor}`,
                   borderRadius: 0,
                   padding: '12px',
@@ -704,10 +815,13 @@ export const MultiplayerLobby: React.FC<MultiplayerLobbyProps> = ({
                   cursor: isConnecting ? 'wait' : 'pointer',
                   outline: 'none',
                   opacity: !inputRoomCode.trim() || isConnecting ? 0.5 : 1,
-                  transition: 'background-color 0.2s ease',
+                  boxShadow: hasInviteCode
+                    ? `0 0 20px ${isLight ? 'rgba(154, 118, 46, 0.35)' : 'rgba(197, 160, 89, 0.45)'}`
+                    : 'none',
+                  transition: 'all 0.2s ease',
                 }}
               >
-                {isConnecting ? 'CONNECTING...' : '[ CONNECT ]'}
+                {isConnecting ? 'CONNECTING...' : hasInviteCode ? `[ CONNECT · ${inputRoomCode} ]` : '[ CONNECT ]'}
               </motion.button>
             </div>
           </div>
@@ -720,38 +834,93 @@ export const MultiplayerLobby: React.FC<MultiplayerLobbyProps> = ({
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'space-between',
+                flexWrap: 'wrap',
+                gap: '12px',
                 padding: '14px 18px',
                 border: `1px solid ${goldColor}`,
                 background: isLight ? 'rgba(154, 118, 46, 0.08)' : 'rgba(197, 160, 89, 0.08)',
               }}
             >
-              <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
                 <span style={{ fontSize: '11px', color: subtextColor, letterSpacing: '0.15em' }}>
                   ACTIVE_VECTOR:
                 </span>
                 <span style={{ fontSize: '16px', fontWeight: 800, letterSpacing: '0.22em', color: goldColor }}>
                   {roomCode}
                 </span>
+
+                {/* Direct Code Copy */}
                 <button
                   type="button"
                   onClick={handleCopyCode}
-                  title="Copy room code"
+                  title="Copy room code only"
                   style={{
                     background: 'transparent',
-                    border: 'none',
-                    color: goldColor,
+                    border: `1px solid ${borderIdle}`,
+                    color: textColor,
                     cursor: 'pointer',
-                    display: 'flex',
+                    display: 'inline-flex',
                     alignItems: 'center',
                     gap: '4px',
                     fontSize: '10px',
                     fontFamily: "'JetBrains Mono', monospace",
-                    padding: '2px 6px',
+                    padding: '3px 8px',
+                    borderRadius: 0,
+                    transition: 'all 0.15s ease',
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.borderColor = goldColor;
+                    e.currentTarget.style.color = goldColor;
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.borderColor = borderIdle;
+                    e.currentTarget.style.color = textColor;
                   }}
                 >
-                  {copied ? <Check size={12} color="#5CB85C" /> : <Copy size={12} />}
-                  <span>{copied ? 'COPIED' : 'COPY'}</span>
+                  {copied ? <Check size={11} color="#5CB85C" /> : <Copy size={11} />}
+                  <span>{copied ? 'COPIED' : 'COPY_CODE'}</span>
                 </button>
+
+                {/* 2. One-Click Copy Dedicated Invite Action Button */}
+                <motion.button
+                  type="button"
+                  onClick={handleCopyInviteLink}
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    background: copiedLink
+                      ? (isLight ? 'rgba(154, 118, 46, 0.22)' : 'rgba(197, 160, 89, 0.28)')
+                      : (isLight ? 'rgba(154, 118, 46, 0.06)' : 'rgba(197, 160, 89, 0.08)'),
+                    color: goldColor,
+                    border: `1px solid ${goldColor}`,
+                    borderRadius: 0,
+                    padding: '4px 10px',
+                    fontFamily: "'JetBrains Mono', monospace",
+                    fontSize: '11px',
+                    fontWeight: 700,
+                    letterSpacing: '0.12em',
+                    cursor: 'pointer',
+                    outline: 'none',
+                    transition: 'all 0.2s cubic-bezier(0.16, 1, 0.3, 1)',
+                    boxShadow: copiedLink
+                      ? `0 0 14px ${isLight ? 'rgba(154, 118, 46, 0.45)' : 'rgba(197, 160, 89, 0.55)'}`
+                      : 'none',
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.backgroundColor = isLight ? 'rgba(154, 118, 46, 0.14)' : 'rgba(197, 160, 89, 0.18)';
+                  }}
+                  onMouseLeave={(e) => {
+                    if (!copiedLink) {
+                      e.currentTarget.style.backgroundColor = isLight ? 'rgba(154, 118, 46, 0.06)' : 'rgba(197, 160, 89, 0.08)';
+                    }
+                  }}
+                >
+                  {copiedLink ? <Check size={12} color={goldColor} /> : <Link2 size={12} color={goldColor} />}
+                  <span>{copiedLink ? '[ COPIED_TO_CLIPBOARD ]' : '[ COPY_INVITE_LINK ]'}</span>
+                </motion.button>
               </div>
 
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>

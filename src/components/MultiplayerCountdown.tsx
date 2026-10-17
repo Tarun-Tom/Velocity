@@ -18,9 +18,7 @@ export const MultiplayerCountdown: React.FC<MultiplayerCountdownProps> = ({
   const bgColor = isLight ? 'rgba(250, 247, 242, 0.90)' : 'rgba(0, 0, 0, 0.88)';
   const isEngage = countdown === 0;
 
-  const displayText = isEngage
-    ? 'ENGAGE'
-    : `CALIBRATING_FIELD: 0${countdown}`;
+  const displayText = isEngage ? 'Type!' : `${countdown}`;
 
   return (
     <motion.div
@@ -72,13 +70,14 @@ export const MultiplayerCountdown: React.FC<MultiplayerCountdownProps> = ({
         <div
           style={{
             fontFamily: "'JetBrains Mono', monospace",
-            fontSize: 10,
+            fontSize: 11,
             letterSpacing: '0.2em',
             textTransform: 'uppercase',
-            color: isLight ? '#5C5750' : 'rgba(253, 253, 251, 0.6)',
+            color: goldColor,
+            fontWeight: 700,
           }}
         >
-          [ ARENA VECTOR SYNCHRONIZATION ]
+          [ GET READY! ]
         </div>
 
         {/* Main Countdown Display */}
@@ -91,9 +90,9 @@ export const MultiplayerCountdown: React.FC<MultiplayerCountdownProps> = ({
             transition={{ duration: 0.18, ease: 'easeOut' }}
             style={{
               fontFamily: "'JetBrains Mono', monospace",
-              fontSize: isEngage ? 26 : 20,
-              fontWeight: 700,
-              letterSpacing: isEngage ? '0.25em' : '0.15em',
+              fontSize: isEngage ? 32 : 28,
+              fontWeight: 800,
+              letterSpacing: isEngage ? '0.2em' : '0.15em',
               color: isEngage ? goldColor : textColor,
               textShadow: isEngage
                 ? `0 0 16px ${isLight ? 'rgba(154, 118, 46, 0.6)' : 'rgba(197, 160, 89, 0.8)'}`
@@ -128,12 +127,12 @@ export const MultiplayerCountdown: React.FC<MultiplayerCountdownProps> = ({
         <div
           style={{
             fontFamily: "'JetBrains Mono', monospace",
-            fontSize: 9,
-            letterSpacing: '0.1em',
-            color: isLight ? 'rgba(30, 28, 25, 0.45)' : 'rgba(253, 253, 251, 0.35)',
+            fontSize: 10,
+            letterSpacing: '0.12em',
+            color: isLight ? 'rgba(30, 28, 25, 0.6)' : 'rgba(253, 253, 251, 0.6)',
           }}
         >
-          INPUT LOCKED // AWAITING TIMESTEP_0
+          Get set to type!
         </div>
       </motion.div>
     </motion.div>

@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { BackgroundGrid } from './components/BackgroundGrid';
 import { WordNode } from './components/WordNode';
 import { VelocityButton } from './components/VelocityButton';
@@ -104,6 +105,15 @@ function App() {
   const [opponentCursors, setOpponentCursors] = useState<Record<string, OpponentCursor>>({});
   const [opponentScores, setOpponentScores] = useState<Record<string, PlayerScoreState>>({});
   const [opponentFinishResults, setOpponentFinishResults] = useState<Record<string, any>>({});
+
+  // ── Multiplayer Snatched Word Notification State ──────────────────────────
+  const [snatchedAlert, setSnatchedAlert] = useState<{
+    winnerCallsign: string;
+    x: number;
+    y: number;
+    id: number;
+  } | null>(null);
+  const snatchedAlertTimeoutRef = useRef<any>(null);
 
   const prngRef = useRef<(() => number) | null>(null);
   const lastCursorBroadcastRef = useRef<number>(0);
@@ -300,6 +310,7 @@ function App() {
       if (momentumDecayTimeoutRef.current) clearTimeout(momentumDecayTimeoutRef.current);
       if (momentumDecayRef.current) clearInterval(momentumDecayRef.current);
       if (momentumAnimRef.current) cancelAnimationFrame(momentumAnimRef.current);
+      if (snatchedAlertTimeoutRef.current) clearTimeout(snatchedAlertTimeoutRef.current);
     };
   }, []);
 
@@ -508,7 +519,7 @@ function App() {
   }, [getPositionInQuadrant, isTooClose, getNextWordFromPool]);
 
   // Initialize game session
-  const initializeGame = (seed?: number) => {
+  const initializeGame = (seed?: number, multiplayerWordCount?: number): WordItem[] => {
     if (seed !== undefined) {
       prngRef.current = mulberry32(seed);
       const freshPool = seededShuffle(DESIGN_DICTIONARY, prngRef.current);
@@ -525,7 +536,9 @@ function App() {
     stateRef.current.gameMode = gameMode;
     mousePathRef.current = []; // Clear recorded mouse trajectory for new signature
 
-    const spawnCount = gameMode === 'Zen' ? 3 : 5;
+    const spawnCount = multiplayerWordCount !== undefined
+      ? multiplayerWordCount
+      : (gameMode === 'Zen' ? 3 : 5);
 
     for (let i = 0; i < spawnCount; i++) {
       const quad = (i % 4) + 1;
@@ -566,6 +579,8 @@ function App() {
     } else {
       setTimeLeft(9999);
     }
+
+    return initialList;
   };
 
   // Keyboard controller
@@ -599,23 +614,6 @@ function App() {
               if (!current.muted) audioController.playThud();
               const nextCompletedCount = current.completedWordsCount + 1;
               setCompletedWordsCount(nextCompletedCount);
-
-              // Realtime Multiplayer Score Broadcast on word completion
-              if (current.isMultiplayer && current.multiplayerChannel) {
-                const totalKeysNow = current.correctKeys + 1 + current.incorrectKeys;
-                const accNow = totalKeysNow > 0 ? Math.round(((current.correctKeys + 1) / totalKeysNow) * 100) : 100;
-                current.multiplayerChannel.send({
-                  type: 'broadcast',
-                  event: 'SCORE_UPDATE',
-                  payload: {
-                    callsign: current.multiplayerCallsign,
-                    completedCount: nextCompletedCount,
-                    wpm: current.currentWpm,
-                    streak: current.flowStreak,
-                    accuracy: accNow,
-                  },
-                });
-              }
 
               const completedAt = Date.now();
               setLastCompletionTime(completedAt);
@@ -697,6 +695,44 @@ function App() {
               const availableQuads = [1, 2, 3, 4].filter(q => q !== mouseQuad);
               const targetQuad = availableQuads[Math.floor(Math.random() * availableQuads.length)];
               const nextWord = spawnWord(updatedWords, targetQuad);
+
+              // ── Multiplayer WORD_SNATCHED & SCORE Broadcast ───────────────
+              if (current.isMultiplayer && current.multiplayerChannel) {
+                const totalKeysNow = current.correctKeys + 1 + current.incorrectKeys;
+                const accNow = totalKeysNow > 0 ? Math.round(((current.correctKeys + 1) / totalKeysNow) * 100) : 100;
+
+                const newWordPayload = {
+                  id: nextWord.id,
+                  text: nextWord.word,
+                  word: nextWord.word,
+                  x: Math.round(nextWord.x),
+                  y: Math.round(nextWord.y),
+                  xPct: Number((nextWord.x / (window.innerWidth || 1920)).toFixed(4)),
+                  yPct: Number((nextWord.y / (window.innerHeight || 1080)).toFixed(4)),
+                };
+
+                current.multiplayerChannel.send({
+                  type: 'broadcast',
+                  event: 'WORD_SNATCHED',
+                  payload: {
+                    wordId: targetWord.id,
+                    winnerCallsign: current.multiplayerCallsign,
+                    newWord: newWordPayload,
+                  },
+                });
+
+                current.multiplayerChannel.send({
+                  type: 'broadcast',
+                  event: 'SCORE_UPDATE',
+                  payload: {
+                    callsign: current.multiplayerCallsign,
+                    completedCount: nextCompletedCount,
+                    wpm: current.currentWpm,
+                    streak: current.flowStreak,
+                    accuracy: accNow,
+                  },
+                });
+              }
 
               setWords([...updatedWords, nextWord]);
               setFocusedWordId(null);
@@ -953,6 +989,8 @@ function App() {
     setOpponentCursors({});
     setOpponentScores({});
     setOpponentFinishResults({});
+    setSnatchedAlert(null);
+    if (snatchedAlertTimeoutRef.current) clearTimeout(snatchedAlertTimeoutRef.current);
 
     if (momentumDecayTimeoutRef.current) clearTimeout(momentumDecayTimeoutRef.current);
     if (momentumDecayRef.current) clearInterval(momentumDecayRef.current);
@@ -975,6 +1013,8 @@ function App() {
     setOpponentCursors({});
     setOpponentScores({});
     setOpponentFinishResults({});
+    setSnatchedAlert(null);
+    if (snatchedAlertTimeoutRef.current) clearTimeout(snatchedAlertTimeoutRef.current);
     setWords([]);
     setFocusedWordId(null);
     setCorrectKeys(0);
@@ -1008,19 +1048,45 @@ function App() {
     if (lastLaunchSeedRef.current === payload.seed) return;
     lastLaunchSeedRef.current = payload.seed;
 
+    const isHost = payload.hostCallsign === payload.callsign;
     setCurrentView('mp-game');
-    setIsMultiplayerHost(payload.hostCallsign === payload.callsign);
+    setIsMultiplayerHost(isHost);
     setMultiplayerRoomCode(payload.roomCode);
     setMultiplayerCallsign(payload.callsign);
     setMultiplayerChannel(payload.channel);
-    setMultiplayerPlayers(payload.players);
+    const activePlayers = payload.players && payload.players.length > 0 ? payload.players : multiplayerPlayers;
+    setMultiplayerPlayers(activePlayers);
     setOpponentCursors({});
     setOpponentScores({});
     setOpponentFinishResults({});
+    setSnatchedAlert(null);
     setGameMode('Chrono');
 
-    // Deterministic seeding for identical words and coordinates!
-    initializeGame(payload.seed);
+    // Dynamic Board Scaling based on room presence: Math.max(6, Math.min(16, participants.length * 2))
+    const participantCount = Math.max(1, activePlayers.length);
+    const activeWordCount = Math.max(6, Math.min(16, participantCount * 2));
+
+    // Initialize game with deterministic seed & scaled word count
+    const initialBoard = initializeGame(payload.seed, activeWordCount);
+
+    // If Host, broadcast BOARD_SYNC to all clients
+    if (isHost && payload.channel) {
+      const serialized = initialBoard.map(w => ({
+        id: w.id,
+        word: w.word,
+        text: w.word,
+        x: w.x,
+        y: w.y,
+        xPct: Number((w.x / (window.innerWidth || 1920)).toFixed(4)),
+        yPct: Number((w.y / (window.innerHeight || 1080)).toFixed(4)),
+      }));
+
+      payload.channel.send({
+        type: 'broadcast',
+        event: 'BOARD_SYNC',
+        payload: { words: serialized },
+      });
+    }
 
     // 3-Second Synchronized Countdown
     setMultiplayerCountdown(3);
@@ -1040,13 +1106,13 @@ function App() {
         setMultiplayerCountdown(null);
       }
     }, 1000);
-  }, [muted]);
+  }, [muted, multiplayerPlayers]);
 
   // ── Multiplayer Realtime Channel Broadcast Listeners ───────────────────────
   useEffect(() => {
     if (!multiplayerChannel) return;
 
-    // 0. Synchronized Match Launch (Session 2+ peer sync)
+    // 0a. Synchronized Match Launch (Session 2+ peer sync)
     multiplayerChannel.on('broadcast', { event: 'GAME_START' }, ({ payload }) => {
       if (payload && payload.seed !== undefined) {
         handleMultiplayerLaunch({
@@ -1055,7 +1121,100 @@ function App() {
           roomCode: payload.roomCode || multiplayerRoomCode || 'ARENA',
           channel: multiplayerChannel,
           callsign: multiplayerCallsign,
-          players: multiplayerPlayers,
+          players: payload.players && payload.players.length > 0 ? payload.players : multiplayerPlayers,
+        });
+      }
+    });
+
+    // 0b. Shared Dynamic Board Sync (Host ground truth)
+    multiplayerChannel.on('broadcast', { event: 'BOARD_SYNC' }, ({ payload }) => {
+      if (payload && Array.isArray(payload.words) && payload.words.length > 0) {
+        const syncedWords: WordItem[] = payload.words.map((w: any) => ({
+          id: w.id,
+          word: w.word || w.text,
+          x: w.xPct ? Math.round(w.xPct * (window.innerWidth || 1920)) : w.x,
+          y: w.yPct ? Math.round(w.yPct * (window.innerHeight || 1080)) : w.y,
+          typedLength: 0,
+          completed: false,
+          scale: 0.95,
+          spawnTime: Date.now(),
+        }));
+        setWords(syncedWords);
+      }
+    });
+
+    // 0c. Realtime Stolen Word Snatch Protocol
+    multiplayerChannel.on('broadcast', { event: 'WORD_SNATCHED' }, ({ payload }) => {
+      if (!payload || !payload.wordId) return;
+
+      const current = stateRef.current;
+      // If we are the winner, we already handled it locally
+      if (payload.winnerCallsign === current.multiplayerCallsign) return;
+
+      // 1. If actively typing this exact word, immediately interrupt and release focus
+      if (current.focusedWordId === payload.wordId) {
+        setFocusedWordId(null);
+        if (!current.muted) audioController.playClick();
+        setSnatchedAlert({
+          winnerCallsign: payload.winnerCallsign || 'RIVAL',
+          x: current.mousePos.x,
+          y: current.mousePos.y,
+          id: Date.now(),
+        });
+        if (snatchedAlertTimeoutRef.current) clearTimeout(snatchedAlertTimeoutRef.current);
+        snatchedAlertTimeoutRef.current = setTimeout(() => {
+          setSnatchedAlert(null);
+        }, 1000);
+      }
+
+      // 2. Trigger particle burst / implosion at the snatched word's location
+      const snatchedWord = current.words.find(w => w.id === payload.wordId);
+      if (snatchedWord) {
+        setImplosion({ x: snatchedWord.x, y: snatchedWord.y, time: Date.now() });
+      }
+
+      // 3. Remove stolen word and insert replacement word
+      if (payload.newWord) {
+        const nw = payload.newWord;
+        const normalizedNewWord: WordItem = {
+          id: nw.id,
+          word: nw.word || nw.text,
+          x: nw.xPct ? Math.round(nw.xPct * (window.innerWidth || 1920)) : nw.x,
+          y: nw.yPct ? Math.round(nw.yPct * (window.innerHeight || 1080)) : nw.y,
+          typedLength: 0,
+          completed: false,
+          scale: 0.95,
+          spawnTime: Date.now(),
+        };
+
+        setWords(prev => {
+          const filtered = prev.filter(w => w.id !== payload.wordId);
+          if (filtered.some(w => w.id === normalizedNewWord.id)) {
+            return filtered;
+          }
+          return [...filtered, normalizedNewWord];
+        });
+      } else {
+        setWords(prev => prev.filter(w => w.id !== payload.wordId));
+      }
+
+      // 4. Update the opponent's score live
+      if (payload.winnerCallsign) {
+        setOpponentScores(prev => {
+          const existing = prev[payload.winnerCallsign] || {
+            callsign: payload.winnerCallsign,
+            completedCount: 0,
+            wpm: 0,
+            streak: 0,
+            accuracy: 100,
+          };
+          return {
+            ...prev,
+            [payload.winnerCallsign]: {
+              ...existing,
+              completedCount: existing.completedCount + 1,
+            },
+          };
         });
       }
     });
@@ -1261,7 +1420,7 @@ function App() {
         </div>
         {flowStreak > 0 && gameMode !== 'Zen' && (
           <div className="stat-row">
-            <span className="stat-label">FLOW:</span>
+            <span className="stat-label">COMBO:</span>
             <span className="stat-value">x{flowStreak + 1}</span>
           </div>
         )}
@@ -1312,12 +1471,6 @@ function App() {
         </>
       ) : (
         <div className="game-container">
-          {/* Architectural Viewfinder Corner Brackets */}
-          <div className="corner-bracket top-left"></div>
-          <div className="corner-bracket top-right"></div>
-          <div className="corner-bracket bottom-left"></div>
-          <div className="corner-bracket bottom-right"></div>
-
           {/* Neural Tether Canvas Background */}
           <BackgroundGrid
             theme={theme}
@@ -1483,6 +1636,44 @@ function App() {
 
                 {/* Realtime Multiplayer Ghost Cursors */}
                 <GhostCursors cursors={opponentCursors} theme={theme} />
+
+                {/* Realtime Snatched Word Stolen Alert Floating Above Cursor */}
+                <AnimatePresence>
+                  {snatchedAlert && (
+                    <motion.div
+                      key={snatchedAlert.id}
+                      initial={{ opacity: 0, y: 0, scale: 0.96 }}
+                      animate={{ opacity: [0, 1, 1, 0], y: -28, scale: 1 }}
+                      exit={{ opacity: 0 }}
+                      transition={{ duration: 1.0, times: [0, 0.15, 0.75, 1.0], ease: 'easeOut' }}
+                      style={{
+                        position: 'fixed',
+                        left: snatchedAlert.x,
+                        top: snatchedAlert.y - 34,
+                        transform: 'translateX(-50%)',
+                        zIndex: 120,
+                        pointerEvents: 'none',
+                        background: theme === 'light' ? 'rgba(250, 247, 242, 0.95)' : 'rgba(0, 0, 0, 0.92)',
+                        border: `1px solid ${theme === 'light' ? 'rgba(30, 28, 25, 0.35)' : 'rgba(253, 253, 251, 0.35)'}`,
+                        borderRadius: 0,
+                        padding: '4px 10px',
+                        fontFamily: "'JetBrains Mono', monospace",
+                        fontSize: '11px',
+                        letterSpacing: '0.12em',
+                        textTransform: 'uppercase',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '6px',
+                        boxShadow: '0 4px 20px rgba(0, 0, 0, 0.45)',
+                        whiteSpace: 'nowrap',
+                      }}
+                    >
+                      <span style={{ color: theme === 'light' ? '#1E1C19' : '#FDFDFB', fontWeight: 700 }}>
+                        Stolen by {snatchedAlert.winnerCallsign}!
+                      </span>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
 
                 {/* Synchronized 3-Second Countdown Overlay */}
                 {multiplayerCountdown !== null && (

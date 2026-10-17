@@ -80,24 +80,30 @@ export const BentoHub: React.FC<BentoHubProps> = ({
 
   const modes: GameMode[] = ['Chrono', 'Overdrive', 'Zen'];
 
+  const modeLabels: Record<GameMode, string> = {
+    Chrono: 'Timed (60s)',
+    Overdrive: 'Survival',
+    Zen: 'Relax',
+  };
+
   const modeCaptions: Record<GameMode, string> = {
-    Chrono: '60-second standardized sprint. Maximize speed and accuracy before time runs out.',
-    Overdrive: 'Survival protocol. Start with 15s. Every completed word adds +3s to the clock.',
-    Zen: 'Endless flow state. Zero timer, zero failure. 2–3 word density for rhythmic typing.',
+    Chrono: 'Type as many words as you can in 60 seconds.',
+    Overdrive: "Start with 15 seconds. Each word adds +3s. Don't let the clock hit zero!",
+    Zen: 'No timer, no pressure. Just type at your own pace.',
   };
 
   const steps = [
     {
-      title: '01 · TARGET',
-      description: 'Move your cursor over floating words to lock your focus.',
+      title: '01 · Hover to Aim',
+      description: 'Move your mouse over floating words to lock onto them.',
     },
     {
-      title: '02 · STRIKE',
-      description: 'Words freeze in place while you type. Letters turn gold as you hit them.',
+      title: '02 · Type to Score',
+      description: 'The word freezes in place. Type it out to clear it from the screen.',
     },
     {
-      title: '03 · FLOW',
-      description: 'Jump to the next word smoothly to build your Synergy streak.',
+      title: '03 · Build a Combo',
+      description: 'Quickly jump to the next word to multiply your streak!',
     },
   ];
 
@@ -204,7 +210,7 @@ export const BentoHub: React.FC<BentoHubProps> = ({
               userSelect: 'none',
             }}
           >
-            A 2D spatial typing engine. Aim with your mouse, strike with your keys.
+            Aim with your mouse. Type the words. Keep your streak alive.
           </p>
 
           {/* 3. Mode Selector with Framer Motion layoutId="activeIndicator" */}
@@ -264,7 +270,7 @@ export const BentoHub: React.FC<BentoHubProps> = ({
                     />
                   )}
                   <span style={{ position: 'relative', zIndex: 1 }}>
-                    [ {mode.toUpperCase()} ]
+                    [ {modeLabels[mode].toUpperCase()} ]
                   </span>
                 </button>
               );
@@ -355,7 +361,7 @@ export const BentoHub: React.FC<BentoHubProps> = ({
                   lineHeight: 1.2,
                 }}
               >
-                01 · SOLO FLOW
+                Play Solo
               </span>
               <span
                 style={{
@@ -367,7 +373,7 @@ export const BentoHub: React.FC<BentoHubProps> = ({
                   lineHeight: 1.2,
                 }}
               >
-                Instant benchmark calibration
+                Quick 60s benchmark
               </span>
             </motion.button>
 
@@ -446,7 +452,7 @@ export const BentoHub: React.FC<BentoHubProps> = ({
                     lineHeight: 1.2,
                   }}
                 >
-                  02 · ARENA DUEL
+                  Play with Friends
                 </span>
                 <span
                   style={{
@@ -459,7 +465,7 @@ export const BentoHub: React.FC<BentoHubProps> = ({
                     lineHeight: 1.2,
                   }}
                 >
-                  Synchronized room [2–8 peers]
+                  Host or join a room [2–8 players]
                 </span>
               </motion.div>
             </motion.button>

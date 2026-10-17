@@ -99,7 +99,7 @@ export const PodiumArchive: React.FC<PodiumArchiveProps> = ({
               marginBottom: 8,
             }}
           >
-            [ MATCH_ARCHIVE // SYNCHRONIZED VECTOR RESOLUTION ]
+            [ MATCH RESULTS ]
           </div>
 
           <h1
@@ -113,7 +113,7 @@ export const PodiumArchive: React.FC<PodiumArchiveProps> = ({
               margin: '0 0 8px 0',
             }}
           >
-            V E C T O R · P O D I U M
+            M A T C H · R E S U L T S
           </h1>
 
           <div
@@ -124,7 +124,7 @@ export const PodiumArchive: React.FC<PodiumArchiveProps> = ({
               color: subtextColor,
             }}
           >
-            ARENA ROOM: <span style={{ color: goldColor, fontWeight: 700 }}>{roomCode}</span> ── 60S STANDARDIZED SPRINT
+            ROOM: <span style={{ color: goldColor, fontWeight: 700 }}>{roomCode}</span> ── 60S MATCH
           </div>
         </div>
 
@@ -167,7 +167,7 @@ export const PodiumArchive: React.FC<PodiumArchiveProps> = ({
                   marginBottom: 12,
                 }}
               >
-                [ 02 · SILVER_VECTOR ]
+                [ 2ND PLACE ]
               </div>
 
               <div
@@ -189,19 +189,19 @@ export const PodiumArchive: React.FC<PodiumArchiveProps> = ({
 
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, fontFamily: "'JetBrains Mono', monospace", fontSize: 11 }}>
                 <div>
-                  <div style={{ color: subtextColor, fontSize: 9 }}>SPEED</div>
-                  <div style={{ color: textColor, fontWeight: 700, fontSize: 16 }}>{second.wpm} <span style={{ fontSize: 10 }}>WPM</span></div>
+                  <div style={{ color: subtextColor, fontSize: 9, letterSpacing: '0.1em' }}>WORDS CLEARED</div>
+                  <div style={{ color: textColor, fontWeight: 700, fontSize: 18 }}>{second.wordsCompleted}</div>
                 </div>
                 <div>
-                  <div style={{ color: subtextColor, fontSize: 9 }}>WORDS</div>
-                  <div style={{ color: textColor, fontWeight: 700, fontSize: 16 }}>{second.wordsCompleted}</div>
+                  <div style={{ color: subtextColor, fontSize: 9, letterSpacing: '0.1em' }}>FINAL WPM</div>
+                  <div style={{ color: textColor, fontWeight: 700, fontSize: 18 }}>{second.wpm} <span style={{ fontSize: 11 }}>WPM</span></div>
                 </div>
                 <div>
-                  <div style={{ color: subtextColor, fontSize: 9 }}>ACCURACY</div>
+                  <div style={{ color: subtextColor, fontSize: 9, letterSpacing: '0.1em' }}>ACCURACY</div>
                   <div style={{ color: textColor, fontWeight: 700 }}>{second.accuracy}%</div>
                 </div>
                 <div>
-                  <div style={{ color: subtextColor, fontSize: 9 }}>SCORE</div>
+                  <div style={{ color: subtextColor, fontSize: 9, letterSpacing: '0.1em' }}>SCORE</div>
                   <div style={{ color: textColor, fontWeight: 700 }}>{second.score}</div>
                 </div>
               </div>
@@ -239,7 +239,7 @@ export const PodiumArchive: React.FC<PodiumArchiveProps> = ({
                     fontWeight: 700,
                   }}
                 >
-                  [ 01 · APEX_CHAMPION ]
+                  [ 1ST PLACE · WINNER ]
                 </div>
                 <Trophy size={16} color={goldColor} />
               </div>
@@ -264,19 +264,19 @@ export const PodiumArchive: React.FC<PodiumArchiveProps> = ({
 
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, fontFamily: "'JetBrains Mono', monospace", fontSize: 12 }}>
                 <div>
-                  <div style={{ color: subtextColor, fontSize: 9 }}>SPEED (WPM)</div>
-                  <div style={{ color: goldColor, fontWeight: 800, fontSize: 22 }}>{first.wpm}</div>
+                  <div style={{ color: subtextColor, fontSize: 9, letterSpacing: '0.1em' }}>WORDS CLEARED</div>
+                  <div style={{ color: goldColor, fontWeight: 800, fontSize: 24 }}>{first.wordsCompleted}</div>
                 </div>
                 <div>
-                  <div style={{ color: subtextColor, fontSize: 9 }}>WORDS COMPLETED</div>
-                  <div style={{ color: goldColor, fontWeight: 800, fontSize: 22 }}>{first.wordsCompleted}</div>
+                  <div style={{ color: subtextColor, fontSize: 9, letterSpacing: '0.1em' }}>FINAL WPM</div>
+                  <div style={{ color: goldColor, fontWeight: 800, fontSize: 24 }}>{first.wpm}</div>
                 </div>
                 <div>
-                  <div style={{ color: subtextColor, fontSize: 9 }}>ACCURACY</div>
+                  <div style={{ color: subtextColor, fontSize: 9, letterSpacing: '0.1em' }}>ACCURACY</div>
                   <div style={{ color: textColor, fontWeight: 700, fontSize: 14 }}>{first.accuracy}%</div>
                 </div>
                 <div>
-                  <div style={{ color: subtextColor, fontSize: 9 }}>CALIBRATED SCORE</div>
+                  <div style={{ color: subtextColor, fontSize: 9, letterSpacing: '0.1em' }}>SCORE</div>
                   <div style={{ color: textColor, fontWeight: 700, fontSize: 14 }}>{first.score}</div>
                 </div>
               </div>
@@ -312,7 +312,7 @@ export const PodiumArchive: React.FC<PodiumArchiveProps> = ({
                   marginBottom: 12,
                 }}
               >
-                [ 03 · BRONZE_STRIKER ]
+                [ 3RD PLACE ]
               </div>
 
               <div
@@ -334,19 +334,19 @@ export const PodiumArchive: React.FC<PodiumArchiveProps> = ({
 
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, fontFamily: "'JetBrains Mono', monospace", fontSize: 11 }}>
                 <div>
-                  <div style={{ color: subtextColor, fontSize: 9 }}>SPEED</div>
-                  <div style={{ color: textColor, fontWeight: 700, fontSize: 16 }}>{third.wpm} <span style={{ fontSize: 10 }}>WPM</span></div>
+                  <div style={{ color: subtextColor, fontSize: 9, letterSpacing: '0.1em' }}>WORDS CLEARED</div>
+                  <div style={{ color: textColor, fontWeight: 700, fontSize: 18 }}>{third.wordsCompleted}</div>
                 </div>
                 <div>
-                  <div style={{ color: subtextColor, fontSize: 9 }}>WORDS</div>
-                  <div style={{ color: textColor, fontWeight: 700, fontSize: 16 }}>{third.wordsCompleted}</div>
+                  <div style={{ color: subtextColor, fontSize: 9, letterSpacing: '0.1em' }}>FINAL WPM</div>
+                  <div style={{ color: textColor, fontWeight: 700, fontSize: 18 }}>{third.wpm} <span style={{ fontSize: 11 }}>WPM</span></div>
                 </div>
                 <div>
-                  <div style={{ color: subtextColor, fontSize: 9 }}>ACCURACY</div>
+                  <div style={{ color: subtextColor, fontSize: 9, letterSpacing: '0.1em' }}>ACCURACY</div>
                   <div style={{ color: textColor, fontWeight: 700 }}>{third.accuracy}%</div>
                 </div>
                 <div>
-                  <div style={{ color: subtextColor, fontSize: 9 }}>SCORE</div>
+                  <div style={{ color: subtextColor, fontSize: 9, letterSpacing: '0.1em' }}>SCORE</div>
                   <div style={{ color: textColor, fontWeight: 700 }}>{third.score}</div>
                 </div>
               </div>
@@ -373,7 +373,7 @@ export const PodiumArchive: React.FC<PodiumArchiveProps> = ({
                 marginBottom: 12,
               }}
             >
-              [ ADDITIONAL CONTENDERS ]
+              [ OTHER PLAYERS ]
             </div>
             {rest.map((p, idx) => (
               <div
@@ -395,9 +395,9 @@ export const PodiumArchive: React.FC<PodiumArchiveProps> = ({
                   </span>
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 18 }}>
+                  <span style={{ color: goldColor, fontWeight: 700 }}>{p.wordsCompleted} WORDS CLEARED</span>
                   <span style={{ color: textColor }}>{p.wpm} WPM</span>
-                  <span style={{ color: subtextColor }}>{p.wordsCompleted} words</span>
-                  <span style={{ color: subtextColor }}>{p.accuracy}%</span>
+                  <span style={{ color: subtextColor }}>{p.accuracy}% ACC</span>
                 </div>
               </div>
             ))}
@@ -417,7 +417,7 @@ export const PodiumArchive: React.FC<PodiumArchiveProps> = ({
             pointerEvents: 'auto',
           }}
         >
-          {/* RETURN TO LOBBY */}
+          {/* PLAY AGAIN */}
           <motion.button
             whileHover={{ scale: 1.01 }}
             whileTap={{ scale: 0.98 }}
@@ -446,10 +446,10 @@ export const PodiumArchive: React.FC<PodiumArchiveProps> = ({
             }}
           >
             <RotateCcw size={14} />
-            [ RETURN_TO_LOBBY ]
+            [ PLAY AGAIN ]
           </motion.button>
 
-          {/* LEAVE ARENA */}
+          {/* BACK TO MENU */}
           <motion.button
             whileHover={{ scale: 1.01 }}
             whileTap={{ scale: 0.98 }}
@@ -477,11 +477,11 @@ export const PodiumArchive: React.FC<PodiumArchiveProps> = ({
             }}
           >
             <Home size={14} />
-            [ LEAVE_ARENA ]
+            [ BACK TO MENU ]
           </motion.button>
         </div>
 
-        {/* Technical Keyboard Shortcut Hint */}
+        {/* Keyboard Shortcut Hint */}
         <div
           style={{
             textAlign: 'center',
@@ -494,7 +494,7 @@ export const PodiumArchive: React.FC<PodiumArchiveProps> = ({
             pointerEvents: 'none',
           }}
         >
-          [ ENTER ── RETURN TO LOBBY ] · [ ESC ── LEAVE ARENA ]
+          [ ENTER ── PLAY AGAIN ] · [ ESC ── BACK TO MENU ]
         </div>
       </div>
     </motion.div>

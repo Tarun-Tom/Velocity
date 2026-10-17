@@ -59,21 +59,21 @@ export const MultiplayerLobby: React.FC<MultiplayerLobbyProps> = ({
   const inputBg = isLight ? 'rgba(30, 28, 25, 0.04)' : 'rgba(253, 253, 251, 0.04)';
   const borderIdle = isLight ? 'rgba(154, 118, 46, 0.25)' : 'rgba(197, 160, 89, 0.25)';
 
-  // ── Callsign State (Max 8 Alphanumeric, Saved to LocalStorage) ─────────────
+  // ── Callsign State (Max 10 Chars, Saved to LocalStorage) ─────────────
   const [callsign, setCallsign] = useState<string>(() => {
     if (initialCallsign && initialCallsign.trim()) {
-      return initialCallsign.trim().toUpperCase().slice(0, 8);
+      return initialCallsign.trim().slice(0, 10);
     }
     if (typeof window !== 'undefined') {
       const saved = localStorage.getItem('velocity_callsign');
-      if (saved && saved.trim()) return saved.trim().toUpperCase().slice(0, 8);
+      if (saved && saved.trim()) return saved.trim().slice(0, 10);
     }
-    const defaultTag = `OP_${Math.floor(10 + Math.random() * 90)}`;
+    const defaultTag = `Player_${Math.floor(10 + Math.random() * 90)}`;
     return defaultTag;
   });
 
   const handleCallsignChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const sanitized = e.target.value.toUpperCase().replace(/[^A-Z0-9_]/g, '').slice(0, 8);
+    const sanitized = e.target.value.replace(/[^A-Za-z0-9_ -]/g, '').slice(0, 10);
     setCallsign(sanitized);
     if (typeof window !== 'undefined') {
       localStorage.setItem('velocity_callsign', sanitized);
@@ -115,7 +115,7 @@ export const MultiplayerLobby: React.FC<MultiplayerLobbyProps> = ({
           callsign: tag,
           isHost: Boolean(p.isHost),
           joinedAt: typeof p.joinedAt === 'number' ? p.joinedAt : Date.now(),
-          status: p.status || 'SYNCHRONIZED',
+          status: p.status || 'Ready',
         });
       });
       roster.sort((a, b) => a.joinedAt - b.joinedAt);
@@ -220,7 +220,7 @@ export const MultiplayerLobby: React.FC<MultiplayerLobbyProps> = ({
           callsign,
           isHost: isHostUser ?? false,
           joinedAt: Date.now(),
-          status: 'SYNCHRONIZED',
+          status: 'Ready',
         }).catch?.(() => {});
       }
     } catch {
@@ -240,7 +240,7 @@ export const MultiplayerLobby: React.FC<MultiplayerLobbyProps> = ({
           roomCode: initialRoomCode || roomCode,
           channel: channelRef.current,
           callsign,
-          players: currentPlayersRef.current.length > 0 ? currentPlayersRef.current : [{ callsign, isHost: Boolean(isHostUser), joinedAt: Date.now(), status: 'SYNCHRONIZED' }],
+          players: currentPlayersRef.current.length > 0 ? currentPlayersRef.current : [{ callsign, isHost: Boolean(isHostUser), joinedAt: Date.now(), status: 'Ready' }],
         });
       }
     };
@@ -258,11 +258,11 @@ export const MultiplayerLobby: React.FC<MultiplayerLobbyProps> = ({
 
   // ── Realtime Room Connection Logic ─────────────────────────────────────────
   const connectToRoom = useCallback((targetCode: string, hosting: boolean) => {
-    const effectiveTag = callsign.trim() || `OP_${Math.floor(10 + Math.random() * 90)}`;
+    const effectiveTag = callsign.trim() || `Player_${Math.floor(10 + Math.random() * 90)}`;
     const formattedCode = targetCode.trim().toUpperCase();
 
     if (!formattedCode) {
-      setConnectionError('ROOM CODE REQUIRED');
+      setConnectionError('Please enter a room code');
       return;
     }
 
@@ -303,23 +303,26 @@ export const MultiplayerLobby: React.FC<MultiplayerLobbyProps> = ({
         currentPlayersRef.current = roster;
       })
       .on('presence', { event: 'join' }, ({ key, newPresences }) => {
-        console.log('[ARENA PRESENCE: JOIN]', key, newPresences);
+        console.log('[ROOM PRESENCE: JOIN]', key, newPresences);
       })
       .on('presence', { event: 'leave' }, ({ key, leftPresences }) => {
-        console.log('[ARENA PRESENCE: LEAVE]', key, leftPresences);
+        console.log('[ROOM PRESENCE: LEAVE]', key, leftPresences);
       })
       // Broadcast: Game start listener
       .on('broadcast', { event: 'GAME_START' }, ({ payload }) => {
-        console.log('[ARENA BROADCAST: GAME_START]', payload);
+        console.log('[ROOM BROADCAST: GAME_START]', payload);
         if (onLaunchGame && channelRef.current) {
           isHandingOverRef.current = true;
+          const activeRoster = (payload && Array.isArray(payload.players) && payload.players.length > 0)
+            ? payload.players
+            : (currentPlayersRef.current.length > 0 ? currentPlayersRef.current : [{ callsign: effectiveTag, isHost: hosting, joinedAt: Date.now(), status: 'Ready' }]);
           onLaunchGame({
             seed: payload.seed,
             hostCallsign: payload.hostCallsign,
             roomCode: formattedCode,
             channel: channelRef.current,
             callsign: effectiveTag,
-            players: currentPlayersRef.current.length > 0 ? currentPlayersRef.current : [{ callsign: effectiveTag, isHost: hosting, joinedAt: Date.now(), status: 'SYNCHRONIZED' }],
+            players: activeRoster,
           });
         }
       });
@@ -335,7 +338,7 @@ export const MultiplayerLobby: React.FC<MultiplayerLobbyProps> = ({
               callsign: effectiveTag,
               isHost: hosting,
               joinedAt: Date.now(),
-              status: 'SYNCHRONIZED',
+              status: 'Ready',
             });
           } catch (trackErr) {
             console.warn('[PRESENCE_TRACK_WARN]', trackErr);
@@ -347,7 +350,7 @@ export const MultiplayerLobby: React.FC<MultiplayerLobbyProps> = ({
           setConnectionError(null);
         } else if (status === 'CHANNEL_ERROR') {
           setIsConnecting(false);
-          setConnectionError('SIGNAL_ERROR: COULD NOT SYNC WITH LOBBY. PLEASE RETRY.');
+          setConnectionError('Could not connect to room. Please try again.');
         } else if (status === 'TIMED_OUT') {
           if (retryAttempts < 1) {
             retryAttempts++;
@@ -359,7 +362,7 @@ export const MultiplayerLobby: React.FC<MultiplayerLobbyProps> = ({
             }, 800);
           } else {
             setIsConnecting(false);
-            setConnectionError('PEER_VECTOR_DELAYED: NETWORK TIMEOUT. CLICK [ CONNECT ] TO RETRY.');
+            setConnectionError('Connection timed out. Please click Retry.');
           }
         }
       }, 20000);
@@ -414,6 +417,7 @@ export const MultiplayerLobby: React.FC<MultiplayerLobbyProps> = ({
         seed,
         hostCallsign: callsign,
         roomCode,
+        players: currentPlayersRef.current,
       },
     });
 
@@ -425,7 +429,7 @@ export const MultiplayerLobby: React.FC<MultiplayerLobbyProps> = ({
         roomCode,
         channel: channelRef.current,
         callsign,
-        players: currentPlayersRef.current.length > 0 ? currentPlayersRef.current : [{ callsign, isHost: true, joinedAt: Date.now(), status: 'SYNCHRONIZED' }],
+        players: currentPlayersRef.current.length > 0 ? currentPlayersRef.current : [{ callsign, isHost: true, joinedAt: Date.now(), status: 'Ready' }],
       });
     }
   };
@@ -552,7 +556,7 @@ export const MultiplayerLobby: React.FC<MultiplayerLobbyProps> = ({
                 textTransform: 'uppercase',
               }}
             >
-              PROTOCOL // ARENA_PRESENCE_v1.0
+              MULTIPLAYER ROOM
             </span>
             {!isSupabaseConfigured && (
               <span
@@ -565,7 +569,7 @@ export const MultiplayerLobby: React.FC<MultiplayerLobbyProps> = ({
                   letterSpacing: '0.1em',
                 }}
               >
-                UNCONFIGURED_ENV
+                OFFLINE_MODE
               </span>
             )}
           </div>
@@ -599,11 +603,11 @@ export const MultiplayerLobby: React.FC<MultiplayerLobbyProps> = ({
             }}
           >
             <X size={12} />
-            [ EXIT_ARENA ]
+            [ LEAVE ROOM ]
           </button>
         </div>
 
-        {/* 1. Callsign Tag Bar at the Top */}
+        {/* 1. Name Input Bar at the Top */}
         <div
           style={{
             display: 'flex',
@@ -623,7 +627,7 @@ export const MultiplayerLobby: React.FC<MultiplayerLobbyProps> = ({
               textTransform: 'uppercase',
             }}
           >
-            <span>IDENTIFICATION_VECTOR // OPERATOR TAG (MAX 8 CHARACTERS)</span>
+            <span>PLAYER NAME (SAVED AUTOMATICALLY)</span>
             {hasInviteCode && (
               <span
                 style={{
@@ -635,7 +639,7 @@ export const MultiplayerLobby: React.FC<MultiplayerLobbyProps> = ({
                   gap: '4px',
                 }}
               >
-                [!] INVITE_ACTIVE · CONFIRM_TAG
+                INVITE ACTIVE · ENTER YOUR NAME
               </span>
             )}
           </div>
@@ -654,7 +658,7 @@ export const MultiplayerLobby: React.FC<MultiplayerLobbyProps> = ({
             }}
           >
             <span style={{ color: goldColor, fontWeight: 700, fontSize: '13px', letterSpacing: '0.15em', marginRight: '10px' }}>
-              [ OPERATOR_TAG:
+              Your Name:
             </span>
             <input
               ref={callsignInputRef}
@@ -667,8 +671,8 @@ export const MultiplayerLobby: React.FC<MultiplayerLobbyProps> = ({
                 }
               }}
               disabled={isConnected || isConnecting}
-              maxLength={8}
-              placeholder="CALLSIGN"
+              maxLength={10}
+              placeholder="e.g. Alex"
               style={{
                 flex: 1,
                 background: 'transparent',
@@ -677,14 +681,10 @@ export const MultiplayerLobby: React.FC<MultiplayerLobbyProps> = ({
                 color: textColor,
                 fontFamily: "'JetBrains Mono', monospace",
                 fontSize: '14px',
-                fontWeight: 800,
-                letterSpacing: '0.2em',
-                textTransform: 'uppercase',
+                fontWeight: 700,
+                letterSpacing: '0.1em',
               }}
             />
-            <span style={{ color: goldColor, fontWeight: 700, fontSize: '13px', letterSpacing: '0.15em' }}>
-              ]
-            </span>
           </div>
         </div>
 
@@ -755,10 +755,10 @@ export const MultiplayerLobby: React.FC<MultiplayerLobbyProps> = ({
               <div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: goldColor, fontSize: '12px', fontWeight: 700, letterSpacing: '0.18em', marginBottom: '8px' }}>
                   <Shield size={13} />
-                  01 · HOST_ARENA
+                  01 · CREATE ROOM
                 </div>
                 <div style={{ fontSize: '11px', color: subtextColor, lineHeight: 1.5, marginBottom: '20px' }}>
-                  Initialize random room vector. You become the host peer controlling vector launch.
+                  Generate a 6-character room code and invite friends. You control when the game starts.
                 </div>
               </div>
 
@@ -784,7 +784,7 @@ export const MultiplayerLobby: React.FC<MultiplayerLobbyProps> = ({
                   boxShadow: `0 0 16px ${isLight ? 'rgba(154, 118, 46, 0.25)' : 'rgba(197, 160, 89, 0.35)'}`,
                 }}
               >
-                {isConnecting ? 'INITIALIZING...' : '[ HOST_SESSION ]'}
+                {isConnecting ? 'CREATING ROOM...' : '[ CREATE ROOM ]'}
               </motion.button>
             </div>
 
@@ -809,23 +809,23 @@ export const MultiplayerLobby: React.FC<MultiplayerLobbyProps> = ({
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: goldColor, fontSize: '12px', fontWeight: 700, letterSpacing: '0.18em' }}>
                     <Users size={13} />
-                    02 · JOIN_ARENA
+                    02 · JOIN ROOM
                   </div>
                   {hasInviteCode && (
                     <span style={{ fontSize: '10px', color: goldColor, fontWeight: 700, letterSpacing: '0.14em' }}>
-                      [ TARGET_ROOM_LOCKED ]
+                      [ ROOM INVITE DETECTED ]
                     </span>
                   )}
                 </div>
                 <div style={{ fontSize: '11px', color: subtextColor, lineHeight: 1.5, marginBottom: '14px' }}>
                   {hasInviteCode
-                    ? `Synchronize vector with host for invited arena [ ${inputRoomCode} ].`
-                    : 'Input 6-character room code from your peer host to synchronize presence.'}
+                    ? `Join your friends in room [ ${inputRoomCode} ] to race together.`
+                    : 'Enter the room code shared by your friend to join the match.'}
                 </div>
 
                 <input
                   type="text"
-                  placeholder="CODE (e.g. VELO-42)"
+                  placeholder="ENTER ROOM CODE (e.g. VELO-42)"
                   value={inputRoomCode}
                   onChange={(e) => setInputRoomCode(e.target.value.toUpperCase())}
                   onKeyDown={(e) => {
@@ -878,7 +878,7 @@ export const MultiplayerLobby: React.FC<MultiplayerLobbyProps> = ({
                   transition: 'all 0.2s ease',
                 }}
               >
-                {isConnecting ? 'CONNECTING...' : hasInviteCode ? `[ CONNECT · ${inputRoomCode} ]` : '[ CONNECT ]'}
+                {isConnecting ? 'JOINING ROOM...' : hasInviteCode ? `[ JOIN · ${inputRoomCode} ]` : '[ JOIN ROOM ]'}
               </motion.button>
             </div>
           </div>
@@ -900,7 +900,7 @@ export const MultiplayerLobby: React.FC<MultiplayerLobbyProps> = ({
             >
               <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
                 <span style={{ fontSize: '11px', color: subtextColor, letterSpacing: '0.15em' }}>
-                  ACTIVE_VECTOR:
+                  ROOM CODE:
                 </span>
                 <span style={{ fontSize: '16px', fontWeight: 800, letterSpacing: '0.22em', color: goldColor }}>
                   {roomCode}
@@ -935,7 +935,7 @@ export const MultiplayerLobby: React.FC<MultiplayerLobbyProps> = ({
                   }}
                 >
                   {copied ? <Check size={11} color="#5CB85C" /> : <Copy size={11} />}
-                  <span>{copied ? 'COPIED' : 'COPY_CODE'}</span>
+                  <span>{copied ? 'COPIED' : 'COPY CODE'}</span>
                 </button>
 
                 {/* 2. One-Click Copy Dedicated Invite Action Button */}
@@ -976,7 +976,7 @@ export const MultiplayerLobby: React.FC<MultiplayerLobbyProps> = ({
                   }}
                 >
                   {copiedLink ? <Check size={12} color={goldColor} /> : <Link2 size={12} color={goldColor} />}
-                  <span>{copiedLink ? '[ COPIED_TO_CLIPBOARD ]' : '[ COPY_INVITE_LINK ]'}</span>
+                  <span>{copiedLink ? '[ COPIED TO CLIPBOARD ]' : '[ COPY INVITE LINK ]'}</span>
                 </motion.button>
               </div>
 
@@ -992,7 +992,7 @@ export const MultiplayerLobby: React.FC<MultiplayerLobbyProps> = ({
                     fontWeight: 700,
                   }}
                 >
-                  {isHost ? 'ROLE: HOST' : 'ROLE: GUEST'}
+                  {isHost ? 'HOST' : 'PLAYER'}
                 </span>
               </div>
             </div>
@@ -1019,10 +1019,10 @@ export const MultiplayerLobby: React.FC<MultiplayerLobbyProps> = ({
                 }}
               >
                 <span style={{ color: goldColor, fontWeight: 700 }}>
-                  CONNECTED_OPERATORS
+                  PLAYERS IN ROOM
                 </span>
                 <span style={{ color: textColor }}>
-                  SLOTS_OCCUPIED: [ {safePlayers.length} / 8 ]
+                  [ {safePlayers.length} / 8 ]
                 </span>
               </div>
 
@@ -1044,7 +1044,7 @@ export const MultiplayerLobby: React.FC<MultiplayerLobbyProps> = ({
                   }}
                 >
                   <Radio size={14} className="animate-spin" />
-                  <span>[ SYNCHRONIZING_PRESENCE_ROSTER... ]</span>
+                  <span>[ JOINING ROOM... ]</span>
                 </div>
               ) : (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
@@ -1088,7 +1088,7 @@ export const MultiplayerLobby: React.FC<MultiplayerLobbyProps> = ({
                           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                             <span style={{ color: subtextColor, opacity: 0.5 }}>──</span>
                             <span style={{ fontSize: '10px', color: '#5CB85C', fontWeight: 600 }}>
-                              [ SYNCHRONIZED ]
+                              Ready
                             </span>
                           </div>
                         </div>
@@ -1112,7 +1112,7 @@ export const MultiplayerLobby: React.FC<MultiplayerLobbyProps> = ({
                         }}
                       >
                         <span>• ----------------</span>
-                        <span>[ SLOT_AVAILABLE ]</span>
+                        <span>Slot Available</span>
                       </div>
                     );
                   })}
@@ -1120,7 +1120,7 @@ export const MultiplayerLobby: React.FC<MultiplayerLobbyProps> = ({
               )}
             </div>
 
-            {/* Launch Vector & Control Bar */}
+            {/* Launch & Control Bar */}
             <div
               style={{
                 display: 'flex',
@@ -1145,7 +1145,7 @@ export const MultiplayerLobby: React.FC<MultiplayerLobbyProps> = ({
                   outline: 'none',
                 }}
               >
-                [ DISCONNECT_ROOM ]
+                [ LEAVE ROOM ]
               </button>
 
               {isHost ? (
@@ -1174,11 +1174,11 @@ export const MultiplayerLobby: React.FC<MultiplayerLobbyProps> = ({
                       transition: 'all 0.25s ease',
                     }}
                   >
-                    [ LAUNCH_VECTOR ]
+                    [ START GAME ]
                   </motion.button>
                   {safePlayers.length < 2 && (
                     <span style={{ fontSize: '10px', color: subtextColor, letterSpacing: '0.1em' }}>
-                      WAITING_FOR_PEERS [MIN 2 REQUIRED]
+                      Waiting for at least 2 players
                     </span>
                   )}
                 </div>
@@ -1194,7 +1194,7 @@ export const MultiplayerLobby: React.FC<MultiplayerLobbyProps> = ({
                   }}
                 >
                   <span style={{ width: 8, height: 8, borderRadius: '50%', background: goldColor, animation: 'pulse 1.5s infinite' }} />
-                  <span>AWAITING HOST LAUNCH VECTOR...</span>
+                  <span>Waiting for host to start...</span>
                 </div>
               )}
             </div>

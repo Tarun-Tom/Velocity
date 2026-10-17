@@ -107,13 +107,13 @@ export const MultiplayerRaceRibbon: React.FC<MultiplayerRaceRibbonProps> = ({
           }}
         >
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            <span style={{ color: goldColor, fontWeight: 700 }}>● ARENA VECTOR</span>
+            <span style={{ color: goldColor, fontWeight: 700 }}>● LIVE RACE</span>
             <span style={{ color: subtextColor }}>ROOM: [{roomCode}]</span>
           </div>
 
           <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
             <span style={{ color: subtextColor }}>
-              INTERVAL REMAINING:
+              TIME LEFT:
             </span>
             <span
               style={{
@@ -122,7 +122,7 @@ export const MultiplayerRaceRibbon: React.FC<MultiplayerRaceRibbonProps> = ({
                 fontSize: 11,
               }}
             >
-              {timeLeft}S
+              {timeLeft}s
             </span>
           </div>
         </div>
@@ -140,88 +140,88 @@ export const MultiplayerRaceRibbon: React.FC<MultiplayerRaceRibbonProps> = ({
           {allPlayers.map((player, idx) => {
             const isLocal = player.callsign === localCallsign;
             const isLeader = idx === 0;
+            const rankOrdinal = idx === 0 ? '1st' : idx === 1 ? '2nd' : idx === 2 ? '3rd' : `${idx + 1}th`;
+            const displayName = isLocal ? 'You' : player.callsign;
 
             return (
-              <motion.div
-                key={player.callsign}
-                layout
-                transition={{ type: 'spring', damping: 22, stiffness: 280 }}
-                style={{
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: 6,
-                  padding: '4px 10px',
-                  background: isLocal
-                    ? isLight
-                      ? 'rgba(154, 118, 46, 0.12)'
-                      : 'rgba(197, 160, 89, 0.12)'
-                    : 'transparent',
-                  border: isLocal
-                    ? `1px solid ${goldColor}`
-                    : `1px solid ${borderIdle}`,
-                  borderRadius: 0,
-                  fontFamily: "'JetBrains Mono', monospace",
-                  fontSize: 11,
-                  whiteSpace: 'nowrap',
-                  boxShadow: isLocal && isLeader
-                    ? `0 0 12px ${isLight ? 'rgba(154, 118, 46, 0.25)' : 'rgba(197, 160, 89, 0.35)'}`
-                    : 'none',
-                }}
-              >
-                <span
-                  style={{
-                    color: isLeader ? goldColor : subtextColor,
-                    fontWeight: isLeader ? 700 : 500,
-                    fontSize: 10,
-                  }}
-                >
-                  0{idx + 1}
-                </span>
-
-                <span
-                  style={{
-                    color: isLocal ? goldColor : textColor,
-                    fontWeight: 600,
-                    letterSpacing: '0.05em',
-                  }}
-                >
-                  {player.callsign}
-                  {isLocal && (
-                    <span style={{ fontSize: 9, opacity: 0.7, marginLeft: 3 }}>
-                      (YOU)
-                    </span>
-                  )}
-                </span>
-
-                <span style={{ color: subtextColor, opacity: 0.5 }}>:</span>
-
-                <span style={{ color: textColor, fontWeight: 700 }}>
-                  {player.wpm}
-                  <span style={{ fontSize: 9, fontWeight: 400, opacity: 0.6, marginLeft: 2 }}>
-                    WPM
-                  </span>
-                </span>
-
-                <span style={{ color: subtextColor, opacity: 0.5 }}>|</span>
-
-                <span style={{ color: subtextColor, fontSize: 10 }}>
-                  {player.completedCount}w
-                </span>
-
-                {player.streak > 1 && (
+              <React.Fragment key={player.callsign}>
+                {idx > 0 && (
                   <span
                     style={{
-                      color: goldColor,
-                      fontSize: 9,
-                      fontWeight: 700,
-                      background: isLight ? 'rgba(154, 118, 46, 0.1)' : 'rgba(197, 160, 89, 0.15)',
-                      padding: '1px 4px',
+                      color: subtextColor,
+                      opacity: 0.35,
+                      fontSize: 11,
+                      userSelect: 'none',
                     }}
                   >
-                    x{player.streak}
+                    ───
                   </span>
                 )}
-              </motion.div>
+                <motion.div
+                  layout
+                  transition={{ type: 'spring', damping: 22, stiffness: 280 }}
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: 6,
+                    padding: '4px 10px',
+                    background: isLocal
+                      ? isLight
+                        ? 'rgba(154, 118, 46, 0.12)'
+                        : 'rgba(197, 160, 89, 0.12)'
+                      : 'transparent',
+                    border: isLocal
+                      ? `1px solid ${goldColor}`
+                      : `1px solid ${borderIdle}`,
+                    borderRadius: 0,
+                    fontFamily: "'JetBrains Mono', monospace",
+                    fontSize: 11,
+                    whiteSpace: 'nowrap',
+                    boxShadow: isLocal && isLeader
+                      ? `0 0 12px ${isLight ? 'rgba(154, 118, 46, 0.25)' : 'rgba(197, 160, 89, 0.35)'}`
+                      : 'none',
+                  }}
+                >
+                  <span
+                    style={{
+                      color: isLeader ? goldColor : subtextColor,
+                      fontWeight: isLeader ? 700 : 600,
+                      fontSize: 10,
+                    }}
+                  >
+                    {rankOrdinal}:
+                  </span>
+
+                  <span
+                    style={{
+                      color: isLocal ? goldColor : textColor,
+                      fontWeight: 600,
+                      letterSpacing: '0.04em',
+                    }}
+                  >
+                    {displayName}
+                  </span>
+
+                  <span style={{ color: subtextColor, fontSize: 10 }}>
+                    ({player.completedCount} words · {player.wpm} WPM)
+                  </span>
+
+                  {player.streak > 1 && (
+                    <span
+                      style={{
+                        color: goldColor,
+                        fontSize: 9,
+                        fontWeight: 700,
+                        background: isLight ? 'rgba(154, 118, 46, 0.1)' : 'rgba(197, 160, 89, 0.15)',
+                        padding: '1px 4px',
+                        marginLeft: 2,
+                      }}
+                    >
+                      x{player.streak}
+                    </span>
+                  )}
+                </motion.div>
+              </React.Fragment>
             );
           })}
         </div>

@@ -40,53 +40,6 @@ body.light-theme {
   pointer-events: none;
 }
 
-/* Architectural Viewfinder Corner Brackets */
-.corner-bracket {
-  position: fixed;
-  width: 16px;
-  height: 16px;
-  opacity: 0.6;
-  pointer-events: none;
-  z-index: 100;
-  border-color: var(--gold-accent, #C5A059) !important;
-}
-
-body.dark-theme .corner-bracket {
-  border-color: #C5A059 !important;
-}
-
-body.light-theme .corner-bracket {
-  border-color: #9A762E !important;
-}
-
-.corner-bracket.top-left {
-  top: 32px;
-  left: 32px;
-  border-top: 1px solid currentColor !important;
-  border-left: 1px solid currentColor !important;
-}
-
-.corner-bracket.top-right {
-  top: 32px;
-  right: 32px;
-  border-top: 1px solid currentColor !important;
-  border-right: 1px solid currentColor !important;
-}
-
-.corner-bracket.bottom-left {
-  bottom: 32px;
-  left: 32px;
-  border-bottom: 1px solid currentColor !important;
-  border-left: 1px solid currentColor !important;
-}
-
-.corner-bracket.bottom-right {
-  bottom: 32px;
-  right: 32px;
-  border-bottom: 1px solid currentColor !important;
-  border-right: 1px solid currentColor !important;
-}
-
 /* ACTIVE HUD OVERLAY */
 .active-hud-overlay {
   position: fixed;

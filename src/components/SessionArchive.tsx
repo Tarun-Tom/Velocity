@@ -144,10 +144,10 @@ export const SessionArchive: React.FC<SessionArchiveProps> = ({
         >
           <div>
             <div style={{ fontSize: '11px', letterSpacing: '0.2em', opacity: 0.55, marginBottom: '4px', color: theme === 'light' ? '#333333' : '#FDFDFB' }}>
-              [ TELEMETRY_PROTOCOL ]
+              [ SESSION SUMMARY ]
             </div>
             <div style={{ fontSize: '22px', fontWeight: 700, letterSpacing: '0.15em', color: '#C5A059' }}>
-              [ SESSION_ARCHIVE ]
+              [ GAME OVER ]
             </div>
           </div>
           <div style={{ textAlign: 'right' }}>
@@ -186,7 +186,7 @@ export const SessionArchive: React.FC<SessionArchiveProps> = ({
               textTransform: 'uppercase',
             }}
           >
-            [ KINETIC_TRAJECTORY_SIGNATURE ]
+            [ MOUSE TRAJECTORY ]
           </div>
 
           <div style={{ width: '100%', height: '240px', marginTop: '16px' }}>
@@ -229,7 +229,7 @@ export const SessionArchive: React.FC<SessionArchiveProps> = ({
           </div>
         </div>
 
-        {/* Bento Data Module 1: [ PEAK_VELOCITY ] (Col-span 4) — Gold (#C5A059) */}
+        {/* Bento Data Module 1: [ FINAL_WPM ] (Col-span 4) — Gold (#C5A059) */}
         <div
           className="bento-box metric-box"
           style={{
@@ -241,7 +241,7 @@ export const SessionArchive: React.FC<SessionArchiveProps> = ({
           }}
         >
           <div style={{ fontSize: '10px', letterSpacing: '0.2em', marginBottom: '12px', color: '#C5A059' }}>
-            [ PEAK_VELOCITY ]
+            [ FINAL WPM ]
           </div>
           <div style={{ fontSize: '36px', fontWeight: 700, color: theme === 'light' ? '#333333' : '#FDFDFB', lineHeight: 1 }}>
             {peakWpm || wpm} <span style={{ fontSize: '12px', opacity: 0.65, color: '#C5A059' }}>WPM</span>
@@ -252,7 +252,7 @@ export const SessionArchive: React.FC<SessionArchiveProps> = ({
           </div>
         </div>
 
-        {/* Bento Data Module 2: [ PRECISION_INDEX ] (Col-span 4) — Gold (#C5A059) */}
+        {/* Bento Data Module 2: [ ACCURACY ] (Col-span 4) — Gold (#C5A059) */}
         <div
           className="bento-box metric-box"
           style={{
@@ -264,7 +264,7 @@ export const SessionArchive: React.FC<SessionArchiveProps> = ({
           }}
         >
           <div style={{ fontSize: '10px', letterSpacing: '0.2em', marginBottom: '12px', color: '#C5A059' }}>
-            [ PRECISION_INDEX ]
+            [ ACCURACY ]
           </div>
           <div style={{ fontSize: '36px', fontWeight: 700, color: theme === 'light' ? '#333333' : '#FDFDFB', lineHeight: 1 }}>
             {accuracy}%
@@ -275,7 +275,7 @@ export const SessionArchive: React.FC<SessionArchiveProps> = ({
           </div>
         </div>
 
-        {/* Bento Data Module 3: [ SYNERGY_FLOW ] (Col-span 4) — Gold (#C5A059) */}
+        {/* Bento Data Module 3: [ BEST_COMBO ] (Col-span 4) — Gold (#C5A059) */}
         <div
           className="bento-box metric-box"
           style={{
@@ -287,13 +287,13 @@ export const SessionArchive: React.FC<SessionArchiveProps> = ({
           }}
         >
           <div style={{ fontSize: '10px', letterSpacing: '0.2em', marginBottom: '12px', color: '#C5A059' }}>
-            [ SYNERGY_FLOW ]
+            [ BEST COMBO ]
           </div>
           <div style={{ fontSize: '36px', fontWeight: 700, color: theme === 'light' ? '#333333' : '#FDFDFB', lineHeight: 1 }}>
             x{flowStreak} <span style={{ fontSize: '12px', opacity: 0.65, color: '#C5A059' }}>STREAK</span>
           </div>
           <div style={{ fontSize: '11px', marginTop: '12px', opacity: 0.75, color: theme === 'light' ? '#333333' : '#FDFDFB', display: 'flex', justifyContent: 'space-between' }}>
-            <span>SYNERGY BONUS:</span>
+            <span>COMBO BONUS:</span>
             <span style={{ fontWeight: 600, color: '#C5A059' }}>+{synergyPoints * 100} PTS</span>
           </div>
         </div>
@@ -315,19 +315,19 @@ export const SessionArchive: React.FC<SessionArchiveProps> = ({
           {/* Asymmetric Bottom-Left Navigation CTA — Bone White (#FDFDFB) */}
           <VelocityButton onClick={onReturnToNucleus}>
             <Home size={14} />
-            [ RETURN_TO_NUCLEUS ]
+            [ BACK TO MENU ]
           </VelocityButton>
 
           {/* Bottom-Right Actions: Export (Bone White) & Primary Recalibrate (Gold) */}
           <div style={{ display: 'flex', gap: '16px' }}>
             <VelocityButton onClick={handleExportSignature}>
               {exported ? <Check size={14} /> : <Download size={14} />}
-              {exported ? '[ SIGNATURE_SAVED ]' : '[ EXPORT_SIGNATURE ]'}
+              {exported ? '[ STATS SAVED ]' : '[ EXPORT STATS ]'}
             </VelocityButton>
 
             <VelocityButton onClick={onRecalibrate} className="begin-session-btn">
               <RefreshCw size={14} />
-              [ RE-CALIBRATE ]
+              [ PLAY AGAIN ]
             </VelocityButton>
           </div>
         </div>

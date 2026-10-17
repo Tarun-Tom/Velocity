@@ -126,15 +126,15 @@ export const MobileGuard: React.FC = () => {
         {/* Title */}
         <div
           style={{
-            fontSize: '15px',
+            fontSize: '16px',
             fontWeight: 700,
             color: '#C5A059',
-            marginBottom: '24px',
+            marginBottom: '20px',
             textTransform: 'uppercase',
-            letterSpacing: '0.12em',
+            letterSpacing: '0.15em',
           }}
         >
-          [ ACCESS_RESTRICTED ]
+          [ DESKTOP ONLY ]
         </div>
 
         {/* Content */}
@@ -146,15 +146,12 @@ export const MobileGuard: React.FC = () => {
             flexDirection: 'column',
             gap: '14px',
             textAlign: 'center',
+            color: '#FDFDFB',
+            opacity: 0.9,
           }}
         >
           <div>
-            <span style={{ color: '#C5A059', fontWeight: 600 }}>SYSTEM_LOG: </span>
-            <span style={{ color: '#FDFDFB', opacity: 1 }}>VELOCITY is calibrated for desktop environments only.</span>
-          </div>
-          <div>
-            <span style={{ color: '#C5A059', fontWeight: 600 }}>INPUT_REQUIRED: </span>
-            <span style={{ color: '#FDFDFB', opacity: 1 }}>PHYSICAL_KEYBOARD + MOUSE</span>
+            Velocity is built for mouse aiming and a physical keyboard. Please open this on a laptop or desktop computer to play!
           </div>
         </div>
       </div>

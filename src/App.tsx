@@ -10,7 +10,6 @@ import { MobileGuard } from './components/MobileGuard';
 import { audioController } from './utils/audio';
 import { Volume2, VolumeX, Moon, Sun, RotateCcw } from 'lucide-react';
 import { useMouseMove } from './hooks/useMouseMove';
-import { AnimatePresence } from 'framer-motion';
 import { MultiplayerLobby, type PlayerPresence, type MultiplayerLaunchPayload } from './components/MultiplayerLobby';
 import { MultiplayerCountdown } from './components/MultiplayerCountdown';
 import { GhostCursors, type OpponentCursor } from './components/GhostCursors';
@@ -46,15 +45,17 @@ interface LeaderboardEntry {
 const BASE_SYNERGY_MS   = 500;
 const VELOCITY_CONSTANT = 1.1;  // px/ms — calibrated to a comfortable cursor speed
 
+export type MultiplayerPhase = 'lobby' | 'countdown' | 'playing' | 'podium';
+
 function App() {
   const [theme, setTheme] = useState<'light' | 'dark'>('dark');
   const [isPlaying, setIsPlaying] = useState(false);
   const [isGameOver, setIsGameOver] = useState(false);
   const [showLeaderboard, setShowLeaderboard] = useState(false);
   const [muted, setMuted] = useState(false);
-  const [isMultiplayerOpen, setIsMultiplayerOpen] = useState(false);
 
-  // ── Multiplayer Arena State ────────────────────────────────────────────────
+  // ── Multiplayer Arena State Machine ─────────────────────────────────────────
+  const [multiplayerPhase, setMultiplayerPhase] = useState<MultiplayerPhase>('lobby');
   const [isMultiplayer, setIsMultiplayer] = useState<boolean>(false);
   const [isMultiplayerHost, setIsMultiplayerHost] = useState<boolean>(false);
   const [multiplayerRoomCode, setMultiplayerRoomCode] = useState<string | null>(null);
@@ -189,6 +190,7 @@ function App() {
     currentWpm,
     isMultiplayer,
     isMultiplayerHost,
+    multiplayerPhase,
     multiplayerCountdown,
     multiplayerCallsign,
     multiplayerChannel,
@@ -215,12 +217,13 @@ function App() {
       currentWpm,
       isMultiplayer,
       isMultiplayerHost,
+      multiplayerPhase,
       multiplayerCountdown,
       multiplayerCallsign,
       multiplayerChannel,
       isPodiumOpen,
     };
-  }, [words, focusedWordId, mousePos, correctKeys, incorrectKeys, completedWordsCount, startTime, muted, lastCompletionTime, flowStreak, synergyPoints, gameMode, isPlaying, isGameOver, timeLeft, currentWpm, isMultiplayer, isMultiplayerHost, multiplayerCountdown, multiplayerCallsign, multiplayerChannel, isPodiumOpen]);
+  }, [words, focusedWordId, mousePos, correctKeys, incorrectKeys, completedWordsCount, startTime, muted, lastCompletionTime, flowStreak, synergyPoints, gameMode, isPlaying, isGameOver, timeLeft, currentWpm, isMultiplayer, isMultiplayerHost, multiplayerPhase, multiplayerCountdown, multiplayerCallsign, multiplayerChannel, isPodiumOpen]);
 
   // Load High Scores from LocalStorage on mount
   useEffect(() => {
@@ -328,6 +331,7 @@ function App() {
         payload: finalStats,
       });
       setIsPodiumOpen(true);
+      setMultiplayerPhase('podium');
     }
   };
 
@@ -530,7 +534,7 @@ function App() {
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       const current = stateRef.current;
-      if (!current.isPlaying || current.isGameOver || current.isPodiumOpen || current.multiplayerCountdown !== null) return;
+      if (!current.isPlaying || current.isGameOver || current.isPodiumOpen || current.multiplayerCountdown !== null || (current.isMultiplayer && current.multiplayerPhase !== 'playing')) return;
       if (e.key === 'Escape') {
         setFocusedWordId(null);
         return;
@@ -882,6 +886,89 @@ function App() {
     }
   }, [isPlaying, isMultiplayer, multiplayerChannel, multiplayerCountdown, multiplayerCallsign, currentWpm, completedWordsCount, flowStreak, accuracy, isPodiumOpen]);
 
+  // ── Multiplayer Lobby Reset & Transition Protocol ─────────────────────────
+  const transitionToLobby = useCallback(() => {
+    setMultiplayerPhase('lobby');
+    setIsPodiumOpen(false);
+    setIsPlaying(false);
+    setIsGameOver(false);
+    setMultiplayerCountdown(null);
+
+    // Reset game session metrics cleanly
+    setWords([]);
+    setFocusedWordId(null);
+    setCorrectKeys(0);
+    setIncorrectKeys(0);
+    setCompletedWordsCount(0);
+    setStartTime(null);
+    setCurrentWpm(0);
+    setPeakWpm(0);
+    setLastCompletionTime(null);
+    setFlowStreak(0);
+    setSynergyPoints(0);
+    setShowSynergyFlash(false);
+    setIsPerfectSynergy(false);
+    setFrictionActive(false);
+    setImplosion(null);
+    setSynergyPing(null);
+    prngRef.current = null;
+    keystrokesTimeline.current = [];
+    mousePathRef.current = [];
+    setOpponentCursors({});
+    setOpponentScores({});
+    setOpponentFinishResults({});
+
+    if (momentumDecayTimeoutRef.current) clearTimeout(momentumDecayTimeoutRef.current);
+    if (momentumDecayRef.current) clearInterval(momentumDecayRef.current);
+    if (momentumAnimRef.current) cancelAnimationFrame(momentumAnimRef.current);
+    if (momentumBarRef.current) momentumBarRef.current.style.width = '0%';
+  }, []);
+
+  // ── Leave Arena Protocol (Full Multiplayer Teardown) ──────────────────────
+  const handleLeaveArena = useCallback(() => {
+    if (multiplayerChannel) {
+      multiplayerChannel.unsubscribe();
+      supabase.removeChannel(multiplayerChannel);
+      setMultiplayerChannel(null);
+    }
+    setIsMultiplayer(false);
+    setMultiplayerPhase('lobby');
+    setIsMultiplayerHost(false);
+    setMultiplayerRoomCode(null);
+    setMultiplayerPlayers([]);
+    setIsPodiumOpen(false);
+    setIsGameOver(false);
+    setIsPlaying(false);
+    setMultiplayerCountdown(null);
+    setOpponentCursors({});
+    setOpponentScores({});
+    setOpponentFinishResults({});
+    setWords([]);
+    setFocusedWordId(null);
+    setCorrectKeys(0);
+    setIncorrectKeys(0);
+    setCompletedWordsCount(0);
+    setStartTime(null);
+    setCurrentWpm(0);
+    setPeakWpm(0);
+    setLastCompletionTime(null);
+    setFlowStreak(0);
+    setSynergyPoints(0);
+    setShowSynergyFlash(false);
+    setIsPerfectSynergy(false);
+    setFrictionActive(false);
+    setImplosion(null);
+    setSynergyPing(null);
+    prngRef.current = null;
+    keystrokesTimeline.current = [];
+    mousePathRef.current = [];
+
+    if (momentumDecayTimeoutRef.current) clearTimeout(momentumDecayTimeoutRef.current);
+    if (momentumDecayRef.current) clearInterval(momentumDecayRef.current);
+    if (momentumAnimRef.current) cancelAnimationFrame(momentumAnimRef.current);
+    if (momentumBarRef.current) momentumBarRef.current.style.width = '0%';
+  }, [multiplayerChannel]);
+
   // ── Multiplayer Realtime Channel Broadcast Listeners ───────────────────────
   useEffect(() => {
     if (!multiplayerChannel) return;
@@ -929,18 +1016,12 @@ function App() {
 
     // 4. Return to Lobby Protocol (Host & Peer Sync)
     multiplayerChannel.on('broadcast', { event: 'RESET_LOBBY' }, () => {
-      setIsPodiumOpen(false);
-      setIsPlaying(false);
-      setIsGameOver(false);
-      setIsMultiplayerOpen(true);
+      transitionToLobby();
     });
     multiplayerChannel.on('broadcast', { event: 'RETURN_LOBBY' }, () => {
-      setIsPodiumOpen(false);
-      setIsPlaying(false);
-      setIsGameOver(false);
-      setIsMultiplayerOpen(true);
+      transitionToLobby();
     });
-  }, [multiplayerChannel, multiplayerCallsign]);
+  }, [multiplayerChannel, multiplayerCallsign, transitionToLobby]);
 
   // ── Stale Ghost Cursors Cleanup ────────────────────────────────────────────
   useEffect(() => {
@@ -964,8 +1045,8 @@ function App() {
 
   // ── Multiplayer Launch Handler ─────────────────────────────────────────────
   const handleMultiplayerLaunch = useCallback((payload: MultiplayerLaunchPayload) => {
-    setIsMultiplayerOpen(false);
     setIsMultiplayer(true);
+    setMultiplayerPhase('countdown');
     setIsMultiplayerHost(payload.hostCallsign === payload.callsign);
     setMultiplayerRoomCode(payload.roomCode);
     setMultiplayerCallsign(payload.callsign);
@@ -975,6 +1056,7 @@ function App() {
     setOpponentScores({});
     setOpponentFinishResults({});
     setIsPodiumOpen(false);
+    setIsGameOver(false);
     setGameMode('Chrono');
 
     // Deterministic seeding for identical words and coordinates!
@@ -996,6 +1078,8 @@ function App() {
       } else {
         clearInterval(timer);
         setMultiplayerCountdown(null);
+        setMultiplayerPhase('playing');
+        setIsPlaying(true);
       }
     }, 1000);
   }, [muted]);
@@ -1102,10 +1186,10 @@ function App() {
           <div 
             className="interactive-area"
             style={{
-              pointerEvents: isPlaying && !isGameOver && !isPodiumOpen ? 'auto' : 'none',
+              pointerEvents: (isMultiplayer ? multiplayerPhase === 'playing' : (isPlaying && !isGameOver)) ? 'auto' : 'none',
             }}
           >
-            {isPlaying &&
+            {((isMultiplayer ? (multiplayerPhase === 'playing' || multiplayerPhase === 'countdown') : isPlaying)) &&
               words.map(w => (
                 <WordNode
                   key={w.id}
@@ -1124,7 +1208,7 @@ function App() {
           </div>
 
           {/* ACTIVE GAME PLAY HUD */}
-          {isPlaying && (
+          {((isMultiplayer && multiplayerPhase === 'playing') || (!isMultiplayer && isPlaying)) && (
             <div className="active-hud-overlay">
               {/* Top-Left: Proximity Variable Title */}
               <div className="hud-logo-container">
@@ -1229,7 +1313,7 @@ function App() {
           )}
 
           {/* REALTIME MULTIPLAYER RACE HUD RIBBON */}
-          {isPlaying && isMultiplayer && (
+          {isMultiplayer && multiplayerPhase === 'playing' && (
             <MultiplayerRaceRibbon
               localCallsign={multiplayerCallsign || 'YOU'}
               localWpm={currentWpm}
@@ -1244,46 +1328,17 @@ function App() {
           )}
 
           {/* REALTIME MULTIPLAYER GHOST CURSORS */}
-          {isPlaying && isMultiplayer && (
+          {isMultiplayer && multiplayerPhase === 'playing' && (
             <GhostCursors cursors={opponentCursors} theme={theme} />
           )}
 
           {/* SYNCHRONIZED COUNTDOWN OVERLAY */}
-          <MultiplayerCountdown countdown={multiplayerCountdown} theme={theme} />
-
-          {/* 1. ASYMMETRIC BENTO HUB (START / HUB SCREEN OVERLAY) */}
-          {!isPlaying && !isGameOver && !isPodiumOpen && (
-            <BentoHub
-              theme={theme}
-              setTheme={setTheme}
-              muted={muted}
-              setMuted={setMuted}
-              showLeaderboard={showLeaderboard}
-              setShowLeaderboard={setShowLeaderboard}
-              gameMode={gameMode}
-              setGameMode={setGameMode}
-              scores={scores}
-              getLeaderboardData={getLeaderboardData}
-              mousePos={mousePos}
-              onBeginSession={() => initializeGame()}
-              onOpenMultiplayer={() => setIsMultiplayerOpen(true)}
-            />
+          {isMultiplayer && multiplayerPhase === 'countdown' && (
+            <MultiplayerCountdown countdown={multiplayerCountdown} theme={theme} />
           )}
 
-          {/* REALTIME MULTIPLAYER ARENA LOBBY */}
-          <AnimatePresence>
-            {isMultiplayerOpen && (
-              <MultiplayerLobby
-                theme={theme}
-                initialRoomCode={multiplayerRoomCode || undefined}
-                onClose={() => setIsMultiplayerOpen(false)}
-                onLaunchGame={handleMultiplayerLaunch}
-              />
-            )}
-          </AnimatePresence>
-
           {/* MULTIPLAYER PODIUM ARCHIVE (MATCH COMPLETION) */}
-          {isPodiumOpen && (
+          {isMultiplayer && multiplayerPhase === 'podium' && (
             <PodiumArchive
               players={podiumPlayersList}
               roomCode={multiplayerRoomCode || 'ARENA'}
@@ -1298,30 +1353,43 @@ function App() {
                     payload: { roomCode: multiplayerRoomCode },
                   });
                 }
-                setIsPodiumOpen(false);
-                setIsGameOver(false);
-                setIsPlaying(false);
-                setIsMultiplayerOpen(true);
+                transitionToLobby();
               }}
-              onExitArena={() => {
-                // Button 2: '[ LEAVE_ARENA ]' (Individual Exit)
-                // Unsubscribe / disconnect from the Supabase channel, reset all multiplayer state, and return directly to landing page
-                if (multiplayerChannel) {
-                  multiplayerChannel.unsubscribe();
-                  supabase.removeChannel(multiplayerChannel);
-                  setMultiplayerChannel(null);
-                }
-                setIsPodiumOpen(false);
-                setIsGameOver(false);
-                setIsPlaying(false);
-                setIsMultiplayer(false);
-                setIsMultiplayerHost(false);
-                setMultiplayerRoomCode(null);
-                setOpponentCursors({});
-                setOpponentScores({});
-                setOpponentFinishResults({});
-                setWords([]);
-                setFocusedWordId(null);
+              onExitArena={handleLeaveArena}
+            />
+          )}
+
+          {/* REALTIME MULTIPLAYER ARENA LOBBY (OR FALLBACK GUARD) */}
+          {isMultiplayer && (multiplayerPhase === 'lobby' || (!['countdown', 'playing', 'podium'].includes(multiplayerPhase))) && (
+            <MultiplayerLobby
+              theme={theme}
+              initialRoomCode={multiplayerRoomCode || undefined}
+              existingChannel={multiplayerChannel}
+              existingPlayers={multiplayerPlayers}
+              isHostUser={isMultiplayerHost}
+              onClose={handleLeaveArena}
+              onLaunchGame={handleMultiplayerLaunch}
+            />
+          )}
+
+          {/* 1. ASYMMETRIC BENTO HUB (START / HUB SCREEN OVERLAY) */}
+          {!isMultiplayer && !isPlaying && !isGameOver && (
+            <BentoHub
+              theme={theme}
+              setTheme={setTheme}
+              muted={muted}
+              setMuted={setMuted}
+              showLeaderboard={showLeaderboard}
+              setShowLeaderboard={setShowLeaderboard}
+              gameMode={gameMode}
+              setGameMode={setGameMode}
+              scores={scores}
+              getLeaderboardData={getLeaderboardData}
+              mousePos={mousePos}
+              onBeginSession={() => initializeGame()}
+              onOpenMultiplayer={() => {
+                setIsMultiplayer(true);
+                setMultiplayerPhase('lobby');
               }}
             />
           )}

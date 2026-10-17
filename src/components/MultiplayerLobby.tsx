@@ -25,6 +25,9 @@ interface MultiplayerLobbyProps {
   onClose: () => void;
   onLaunchGame?: (payload: MultiplayerLaunchPayload) => void;
   initialRoomCode?: string;
+  existingChannel?: RealtimeChannel | null;
+  existingPlayers?: PlayerPresence[];
+  isHostUser?: boolean;
 }
 
 // ── Telemetry Corner Markers ───────────────────────────────────────────────────
@@ -42,6 +45,9 @@ export const MultiplayerLobby: React.FC<MultiplayerLobbyProps> = ({
   onClose,
   onLaunchGame,
   initialRoomCode,
+  existingChannel,
+  existingPlayers,
+  isHostUser,
 }) => {
   const isLight = theme === 'light';
   const goldColor = isLight ? '#9A762E' : '#C5A059';
@@ -72,19 +78,49 @@ export const MultiplayerLobby: React.FC<MultiplayerLobbyProps> = ({
   // ── Room & Realtime Presence State ─────────────────────────────────────────
   const [roomCode, setRoomCode] = useState<string>(initialRoomCode || '');
   const [inputRoomCode, setInputRoomCode] = useState<string>('');
-  const [isHost, setIsHost] = useState<boolean>(false);
-  const [isConnected, setIsConnected] = useState<boolean>(false);
+  const [isHost, setIsHost] = useState<boolean>(isHostUser || false);
+  const [isConnected, setIsConnected] = useState<boolean>(Boolean(existingChannel && initialRoomCode));
   const [isConnecting, setIsConnecting] = useState<boolean>(false);
   const [connectionError, setConnectionError] = useState<string | null>(null);
-  const [players, setPlayers] = useState<PlayerPresence[]>([]);
+  const [players, setPlayers] = useState<PlayerPresence[]>(existingPlayers || []);
   const [copied, setCopied] = useState<boolean>(false);
 
-  const channelRef = useRef<RealtimeChannel | null>(null);
+  const channelRef = useRef<RealtimeChannel | null>(existingChannel || null);
   const isHandingOverRef = useRef<boolean>(false);
-  const currentPlayersRef = useRef<PlayerPresence[]>([]);
+  const currentPlayersRef = useRef<PlayerPresence[]>(existingPlayers || []);
 
-  // Clean disconnect
-  const disconnectChannel = useCallback(() => {
+  // Safe presence extraction helper with defensive fallback
+  const parsePresenceRoster = useCallback((presenceState: any): PlayerPresence[] => {
+    if (!presenceState) return [];
+    try {
+      const activePlayers: any[] = presenceState ? Object.values(presenceState).flat() : [];
+      const roster: PlayerPresence[] = [];
+      const seen = new Set<string>();
+
+      activePlayers.forEach((p) => {
+        if (!p || typeof p !== 'object') return;
+        const tag = (p.callsign || '').trim();
+        if (!tag || seen.has(tag)) return;
+        seen.add(tag);
+        roster.push({
+          callsign: tag,
+          isHost: Boolean(p.isHost),
+          joinedAt: typeof p.joinedAt === 'number' ? p.joinedAt : Date.now(),
+          status: p.status || 'SYNCHRONIZED',
+        });
+      });
+      roster.sort((a, b) => a.joinedAt - b.joinedAt);
+      return roster;
+    } catch (err) {
+      console.error('[PRESENCE SYNC ERROR]', err);
+      return [];
+    }
+  }, []);
+
+  const safePlayers = Array.isArray(players) ? players : [];
+
+  // Exit lobby and disconnect channel explicitly
+  const handleExitLobby = useCallback(() => {
     if (channelRef.current) {
       channelRef.current.unsubscribe();
       supabase.removeChannel(channelRef.current);
@@ -96,28 +132,86 @@ export const MultiplayerLobby: React.FC<MultiplayerLobbyProps> = ({
     setRoomCode('');
     setPlayers([]);
     currentPlayersRef.current = [];
-  }, []);
+    onClose();
+  }, [onClose]);
+
+  // Clean disconnect helper (reverts connection state without closing modal)
+  const disconnectChannel = useCallback(() => {
+    if (channelRef.current && !existingChannel) {
+      channelRef.current.unsubscribe();
+      supabase.removeChannel(channelRef.current);
+      channelRef.current = null;
+    }
+    setIsConnected(false);
+    setIsConnecting(false);
+    setIsHost(false);
+    setRoomCode('');
+    setPlayers([]);
+    currentPlayersRef.current = [];
+  }, [existingChannel]);
 
   // Listen for Escape key to exit modal safely
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
-        disconnectChannel();
-        onClose();
+        handleExitLobby();
       }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [disconnectChannel, onClose]);
+  }, [handleExitLobby]);
 
-  // Cleanup channel on unmount only if not handing over to gameplay
+  // Cleanup channel on unmount only if not handing over to gameplay and not existing channel
   useEffect(() => {
     return () => {
-      if (!isHandingOverRef.current) {
+      if (!isHandingOverRef.current && !existingChannel) {
         disconnectChannel();
       }
     };
-  }, [disconnectChannel]);
+  }, [disconnectChannel, existingChannel]);
+
+  // ── If existingChannel passed from App.tsx, attach presence and sync listeners ──
+  useEffect(() => {
+    if (!existingChannel) return;
+
+    channelRef.current = existingChannel;
+    setIsConnected(true);
+    setIsConnecting(false);
+    if (initialRoomCode) setRoomCode(initialRoomCode);
+    if (isHostUser !== undefined) setIsHost(isHostUser);
+
+    // Initial safe sync from existing channel presence
+    const initialRoster = parsePresenceRoster(existingChannel.presenceState());
+    if (initialRoster.length > 0) {
+      setPlayers(initialRoster);
+      currentPlayersRef.current = initialRoster;
+    } else if (existingPlayers && existingPlayers.length > 0) {
+      setPlayers(existingPlayers);
+      currentPlayersRef.current = existingPlayers;
+    }
+
+    existingChannel
+      .on('presence', { event: 'sync' }, () => {
+        const roster = parsePresenceRoster(existingChannel.presenceState());
+        if (roster.length > 0) {
+          setPlayers(roster);
+          currentPlayersRef.current = roster;
+        }
+      })
+      .on('broadcast', { event: 'GAME_START' }, ({ payload }) => {
+        if (onLaunchGame && channelRef.current) {
+          isHandingOverRef.current = true;
+          onLaunchGame({
+            seed: payload.seed,
+            hostCallsign: payload.hostCallsign,
+            roomCode: initialRoomCode || roomCode,
+            channel: channelRef.current,
+            callsign,
+            players: currentPlayersRef.current.length > 0 ? currentPlayersRef.current : [{ callsign, isHost: false, joinedAt: Date.now(), status: 'SYNCHRONIZED' }],
+          });
+        }
+      });
+  }, [existingChannel, initialRoomCode, isHostUser, existingPlayers, parsePresenceRoster, onLaunchGame, callsign, roomCode]);
 
   // ── Realtime Room Connection Logic ─────────────────────────────────────────
   const connectToRoom = useCallback((targetCode: string, hosting: boolean) => {
@@ -132,8 +226,8 @@ export const MultiplayerLobby: React.FC<MultiplayerLobbyProps> = ({
     setConnectionError(null);
     setIsConnecting(true);
 
-    // Disconnect any existing channel first
-    if (channelRef.current) {
+    // Disconnect any existing non-inherited channel first
+    if (channelRef.current && !existingChannel) {
       channelRef.current.unsubscribe();
       supabase.removeChannel(channelRef.current);
     }
@@ -152,24 +246,7 @@ export const MultiplayerLobby: React.FC<MultiplayerLobbyProps> = ({
     // Presence: Synchronize players
     channel
       .on('presence', { event: 'sync' }, () => {
-        const state = channel.presenceState();
-        const roster: PlayerPresence[] = [];
-
-        Object.keys(state).forEach((key) => {
-          const presences = state[key] as any[];
-          if (presences && presences.length > 0) {
-            const p = presences[0];
-            roster.push({
-              callsign: p.callsign || key,
-              isHost: Boolean(p.isHost),
-              joinedAt: p.joinedAt || Date.now(),
-              status: p.status || 'SYNCHRONIZED',
-            });
-          }
-        });
-
-        // Sort by joinedAt so host / early peers appear first
-        roster.sort((a, b) => a.joinedAt - b.joinedAt);
+        const roster = parsePresenceRoster(channel.presenceState());
         setPlayers(roster);
         currentPlayersRef.current = roster;
       })
@@ -214,14 +291,14 @@ export const MultiplayerLobby: React.FC<MultiplayerLobbyProps> = ({
           setConnectionError('TIMED_OUT: PEER VECTOR UNREACHABLE');
         }
       });
-  }, [callsign, onLaunchGame]);
+  }, [callsign, existingChannel, onLaunchGame, parsePresenceRoster]);
 
-  // If initialRoomCode was passed (e.g. returning to lobby after match), auto-connect
+  // If initialRoomCode was passed without existingChannel, auto-connect
   useEffect(() => {
-    if (initialRoomCode && !isConnected && !isConnecting && !channelRef.current) {
+    if (initialRoomCode && !existingChannel && !isConnected && !isConnecting && !channelRef.current) {
       connectToRoom(initialRoomCode, false);
     }
-  }, [initialRoomCode, isConnected, isConnecting, connectToRoom]);
+  }, [initialRoomCode, existingChannel, isConnected, isConnecting, connectToRoom]);
 
   // ── Host Room Flow ─────────────────────────────────────────────────────────
   const handleHostRoom = () => {
@@ -360,10 +437,7 @@ export const MultiplayerLobby: React.FC<MultiplayerLobbyProps> = ({
 
           <button
             type="button"
-            onClick={() => {
-              disconnectChannel();
-              onClose();
-            }}
+            onClick={handleExitLobby}
             style={{
               background: 'transparent',
               border: `1px solid ${borderIdle}`,
@@ -683,81 +757,102 @@ export const MultiplayerLobby: React.FC<MultiplayerLobbyProps> = ({
                   CONNECTED_OPERATORS
                 </span>
                 <span style={{ color: textColor }}>
-                  SLOTS_OCCUPIED: [ {players.length} / 8 ]
+                  SLOTS_OCCUPIED: [ {safePlayers.length} / 8 ]
                 </span>
               </div>
 
-              {/* Roster Slots List */}
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                {Array.from({ length: 8 }).map((_, index) => {
-                  const player = players[index];
-                  if (player) {
-                    const isSelf = player.callsign === callsign;
+              {/* Roster Slots List or Loading Indicator */}
+              {isConnected && safePlayers.length === 0 ? (
+                <div
+                  style={{
+                    padding: '24px',
+                    border: `1px dashed ${goldColor}`,
+                    textAlign: 'center',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '10px',
+                    color: goldColor,
+                    fontSize: '11px',
+                    letterSpacing: '0.18em',
+                    background: isLight ? 'rgba(154, 118, 46, 0.04)' : 'rgba(197, 160, 89, 0.04)',
+                  }}
+                >
+                  <Radio size={14} className="animate-spin" />
+                  <span>[ SYNCHRONIZING_PRESENCE_ROSTER... ]</span>
+                </div>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                  {Array.from({ length: 8 }).map((_, index) => {
+                    const player = safePlayers[index];
+                    if (player) {
+                      const isSelf = player.callsign === callsign;
+                      return (
+                        <div
+                          key={player.callsign}
+                          style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'space-between',
+                            padding: '8px 12px',
+                            border: `1px solid ${isSelf ? goldColor : borderIdle}`,
+                            background: isSelf
+                              ? isLight ? 'rgba(154, 118, 46, 0.06)' : 'rgba(197, 160, 89, 0.06)'
+                              : 'transparent',
+                            fontSize: '12px',
+                            letterSpacing: '0.14em',
+                          }}
+                        >
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            <span style={{ color: goldColor }}>•</span>
+                            <span style={{ fontWeight: 700, color: textColor }}>
+                              {player.callsign}
+                            </span>
+                            {player.isHost && (
+                              <span style={{ fontSize: '10px', color: goldColor, opacity: 0.85 }}>
+                                (HOST)
+                              </span>
+                            )}
+                            {isSelf && (
+                              <span style={{ fontSize: '9px', background: isLight ? 'rgba(154, 118, 46, 0.2)' : 'rgba(197, 160, 89, 0.2)', color: goldColor, padding: '1px 5px' }}>
+                                YOU
+                              </span>
+                            )}
+                          </div>
+
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            <span style={{ color: subtextColor, opacity: 0.5 }}>──</span>
+                            <span style={{ fontSize: '10px', color: '#5CB85C', fontWeight: 600 }}>
+                              [ SYNCHRONIZED ]
+                            </span>
+                          </div>
+                        </div>
+                      );
+                    }
+
+                    // Empty Slot
                     return (
                       <div
-                        key={player.callsign}
+                        key={`empty-${index}`}
                         style={{
                           display: 'flex',
                           alignItems: 'center',
                           justifyContent: 'space-between',
-                          padding: '8px 12px',
-                          border: `1px solid ${isSelf ? goldColor : borderIdle}`,
-                          background: isSelf
-                            ? isLight ? 'rgba(154, 118, 46, 0.06)' : 'rgba(197, 160, 89, 0.06)'
-                            : 'transparent',
-                          fontSize: '12px',
+                          padding: '6px 12px',
+                          border: '1px dashed rgba(197, 160, 89, 0.12)',
+                          fontSize: '11px',
                           letterSpacing: '0.14em',
+                          opacity: 0.35,
+                          color: subtextColor,
                         }}
                       >
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                          <span style={{ color: goldColor }}>•</span>
-                          <span style={{ fontWeight: 700, color: textColor }}>
-                            {player.callsign}
-                          </span>
-                          {player.isHost && (
-                            <span style={{ fontSize: '10px', color: goldColor, opacity: 0.85 }}>
-                              (HOST)
-                            </span>
-                          )}
-                          {isSelf && (
-                            <span style={{ fontSize: '9px', background: isLight ? 'rgba(154, 118, 46, 0.2)' : 'rgba(197, 160, 89, 0.2)', color: goldColor, padding: '1px 5px' }}>
-                              YOU
-                            </span>
-                          )}
-                        </div>
-
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                          <span style={{ color: subtextColor, opacity: 0.5 }}>──</span>
-                          <span style={{ fontSize: '10px', color: '#5CB85C', fontWeight: 600 }}>
-                            [ SYNCHRONIZED ]
-                          </span>
-                        </div>
+                        <span>• ----------------</span>
+                        <span>[ SLOT_AVAILABLE ]</span>
                       </div>
                     );
-                  }
-
-                  // Empty Slot
-                  return (
-                    <div
-                      key={`empty-${index}`}
-                      style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'space-between',
-                        padding: '6px 12px',
-                        border: '1px dashed rgba(197, 160, 89, 0.12)',
-                        fontSize: '11px',
-                        letterSpacing: '0.14em',
-                        opacity: 0.35,
-                        color: subtextColor,
-                      }}
-                    >
-                      <span>• ----------------</span>
-                      <span>[ SLOT_AVAILABLE ]</span>
-                    </div>
-                  );
-                })}
-              </div>
+                  })}
+                </div>
+              )}
             </div>
 
             {/* Launch Vector & Control Bar */}
@@ -771,7 +866,7 @@ export const MultiplayerLobby: React.FC<MultiplayerLobbyProps> = ({
             >
               <button
                 type="button"
-                onClick={disconnectChannel}
+                onClick={handleExitLobby}
                 style={{
                   background: 'transparent',
                   border: `1px solid ${borderIdle}`,
@@ -793,22 +888,22 @@ export const MultiplayerLobby: React.FC<MultiplayerLobbyProps> = ({
                   <motion.button
                     type="button"
                     onClick={handleLaunchVector}
-                    disabled={players.length < 2}
-                    whileHover={players.length >= 2 ? { scale: 1.02 } : {}}
-                    whileTap={players.length >= 2 ? { scale: 0.98 } : {}}
+                    disabled={safePlayers.length < 2}
+                    whileHover={safePlayers.length >= 2 ? { scale: 1.02 } : {}}
+                    whileTap={safePlayers.length >= 2 ? { scale: 0.98 } : {}}
                     style={{
-                      background: players.length >= 2 ? goldColor : 'transparent',
-                      color: players.length >= 2 ? (isLight ? '#FAF7F2' : '#000000') : subtextColor,
-                      border: `1px solid ${players.length >= 2 ? goldColor : borderIdle}`,
+                      background: safePlayers.length >= 2 ? goldColor : 'transparent',
+                      color: safePlayers.length >= 2 ? (isLight ? '#FAF7F2' : '#000000') : subtextColor,
+                      border: `1px solid ${safePlayers.length >= 2 ? goldColor : borderIdle}`,
                       borderRadius: 0,
                       padding: '14px 28px',
                       fontFamily: "'JetBrains Mono', monospace",
                       fontSize: '13px',
                       fontWeight: 800,
                       letterSpacing: '0.22em',
-                      cursor: players.length >= 2 ? 'pointer' : 'not-allowed',
+                      cursor: safePlayers.length >= 2 ? 'pointer' : 'not-allowed',
                       outline: 'none',
-                      boxShadow: players.length >= 2
+                      boxShadow: safePlayers.length >= 2
                         ? `0 0 20px ${isLight ? 'rgba(154, 118, 46, 0.35)' : 'rgba(197, 160, 89, 0.45)'}`
                         : 'none',
                       transition: 'all 0.25s ease',
@@ -816,7 +911,7 @@ export const MultiplayerLobby: React.FC<MultiplayerLobbyProps> = ({
                   >
                     [ LAUNCH_VECTOR ]
                   </motion.button>
-                  {players.length < 2 && (
+                  {safePlayers.length < 2 && (
                     <span style={{ fontSize: '10px', color: subtextColor, letterSpacing: '0.1em' }}>
                       WAITING_FOR_PEERS [MIN 2 REQUIRED]
                     </span>

@@ -1,20 +1,22 @@
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+// Default project credentials from .env.txt
+const DEFAULT_SUPABASE_URL = 'https://woxmwwujbvjftfenmxgn.supabase.co';
+const DEFAULT_SUPABASE_ANON_KEY = 'sb_publishable_aa7GsOY_PY2GnjROq2SrQA_X66tuYdz';
 
-export const isSupabaseConfigured = Boolean(supabaseUrl && supabaseAnonKey);
+// Prefer environment variables injected by Vite, fallback to active project credentials
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || DEFAULT_SUPABASE_URL;
+const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || DEFAULT_SUPABASE_ANON_KEY;
 
-if (!isSupabaseConfigured) {
-  console.warn(
-    '[VELOCITY: SUPABASE] Missing VITE_SUPABASE_URL or VITE_SUPABASE_ANON_KEY. Realtime multiplayer features will operate in fallback mode.'
-  );
-}
+export const isSupabaseConfigured = Boolean(
+  supabaseUrl &&
+  supabaseAnonKey &&
+  !supabaseUrl.includes('placeholder')
+);
 
-// Fallback dummy credentials to prevent createClient from throwing if env is absent
 export const supabase: SupabaseClient = createClient(
-  supabaseUrl || 'https://placeholder-velocity.supabase.co',
-  supabaseAnonKey || 'placeholder-velocity-key',
+  supabaseUrl,
+  supabaseAnonKey,
   {
     realtime: {
       params: {

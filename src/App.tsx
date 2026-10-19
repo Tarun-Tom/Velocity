@@ -118,6 +118,7 @@ function App() {
   const prngRef = useRef<(() => number) | null>(null);
   const lastCursorBroadcastRef = useRef<number>(0);
   const lastScoreBroadcastRef = useRef<number>(0);
+  const localFinalStatsRef = useRef<any>(null);
 
   const [isMobile, setIsMobile] = useState<boolean>(() => {
     if (typeof window !== 'undefined') {
@@ -217,6 +218,12 @@ function App() {
   const momentumDecayTimeoutRef = useRef<any>(null);
   const momentumDecayRef = useRef<any>(null);
 
+  const totalKeys = correctKeys + incorrectKeys;
+  const accuracy = totalKeys > 0 ? Math.round((correctKeys / totalKeys) * 100) : 100;
+  const rawScore = (correctKeys * 10) + (synergyPoints * 100);
+  const accMultiplier = accuracy === 100 ? 1.0 : (accuracy < 95 ? 0.8 : 1.0);
+  const score = Math.round(rawScore * accMultiplier);
+
   // Keep references to avoid re-binding keyboard listeners
   const stateRef = useRef({
     currentView,
@@ -243,6 +250,8 @@ function App() {
     multiplayerChannel,
     multiplayerRoomCode,
     isPodiumOpen,
+    accuracy,
+    score,
   });
 
   useEffect(() => {
@@ -271,8 +280,10 @@ function App() {
       multiplayerChannel,
       multiplayerRoomCode,
       isPodiumOpen,
+      accuracy,
+      score,
     };
-  }, [currentView, words, focusedWordId, mousePos, correctKeys, incorrectKeys, completedWordsCount, startTime, muted, lastCompletionTime, flowStreak, synergyPoints, gameMode, isPlaying, isGameOver, timeLeft, currentWpm, isMultiplayer, isMultiplayerHost, multiplayerCountdown, multiplayerCallsign, multiplayerChannel, multiplayerRoomCode, isPodiumOpen]);
+  }, [currentView, words, focusedWordId, mousePos, correctKeys, incorrectKeys, completedWordsCount, startTime, muted, lastCompletionTime, flowStreak, synergyPoints, gameMode, isPlaying, isGameOver, timeLeft, currentWpm, isMultiplayer, isMultiplayerHost, multiplayerCountdown, multiplayerCallsign, multiplayerChannel, multiplayerRoomCode, isPodiumOpen, accuracy, score]);
 
   // Load High Scores from LocalStorage on mount
   useEffect(() => {
@@ -365,20 +376,40 @@ function App() {
     if (momentumBarRef.current) momentumBarRef.current.style.width = '0%';
 
     const current = stateRef.current;
+    const currentTotalKeys = current.correctKeys + current.incorrectKeys;
+    const currentAccuracy = currentTotalKeys > 0 ? Math.round((current.correctKeys / currentTotalKeys) * 100) : 100;
+    const currentRawScore = (current.correctKeys * 10) + (current.synergyPoints * 100);
+    const currentAccMult = currentAccuracy === 100 ? 1.0 : (currentAccuracy < 95 ? 0.8 : 1.0);
+    const currentScore = Math.round(currentRawScore * currentAccMult);
+
     if (current.currentView === 'mp-game') {
       if (current.multiplayerChannel) {
+        const channel = current.multiplayerChannel;
         const finalStats = {
           callsign: current.multiplayerCallsign,
           finalWpm: current.currentWpm,
-          finalAccuracy: accuracy,
+          finalAccuracy: currentAccuracy,
           wordsCompleted: current.completedWordsCount,
-          finalScore: score,
+          finalScore: currentScore,
         };
-        current.multiplayerChannel.send({
-          type: 'broadcast',
-          event: 'MATCH_FINISH',
-          payload: finalStats,
-        });
+        localFinalStatsRef.current = finalStats;
+
+        const broadcastFinish = () => {
+          try {
+            channel.send({
+              type: 'broadcast',
+              event: 'MATCH_FINISH',
+              payload: finalStats,
+            });
+          } catch (err) {
+            console.warn('[MATCH_FINISH BROADCAST ERROR]', err);
+          }
+        };
+
+        broadcastFinish();
+        setTimeout(broadcastFinish, 300);
+        setTimeout(broadcastFinish, 800);
+        setTimeout(broadcastFinish, 1500);
       }
       setCurrentView('mp-podium');
     } else {
@@ -703,6 +734,9 @@ function App() {
               if (current.isMultiplayer && current.multiplayerChannel) {
                 const totalKeysNow = current.correctKeys + 1 + current.incorrectKeys;
                 const accNow = totalKeysNow > 0 ? Math.round(((current.correctKeys + 1) / totalKeysNow) * 100) : 100;
+                const rawScoreNow = ((current.correctKeys + 1) * 10) + (current.synergyPoints * 100);
+                const accMultNow = accNow === 100 ? 1.0 : (accNow < 95 ? 0.8 : 1.0);
+                const scoreNow = Math.round(rawScoreNow * accMultNow);
 
                 const newWordPayload = {
                   id: nextWord.id,
@@ -734,6 +768,7 @@ function App() {
                     wpm: current.currentWpm,
                     streak: current.flowStreak,
                     accuracy: accNow,
+                    score: scoreNow,
                   },
                 });
               }
@@ -868,13 +903,6 @@ function App() {
     return () => clearInterval(interval);
   }, [startTime, isPlaying, peakWpm]);
 
-  const totalKeys = correctKeys + incorrectKeys;
-  const accuracy = totalKeys > 0 ? Math.round((correctKeys / totalKeys) * 100) : 100;
-
-  const rawScore = (correctKeys * 10) + (synergyPoints * 100);
-  const accMultiplier = accuracy === 100 ? 1.0 : (accuracy < 95 ? 0.8 : 1.0);
-  const score = Math.round(rawScore * accMultiplier);
-
   // High Scores & Leaderboard tracking
   useEffect(() => {
     if (isGameOver && gameMode !== 'Zen') {
@@ -966,10 +994,11 @@ function App() {
           wpm: currentWpm,
           streak: flowStreak,
           accuracy,
+          score,
         },
       });
     }
-  }, [currentView, multiplayerChannel, multiplayerCountdown, multiplayerCallsign, currentWpm, completedWordsCount, flowStreak, accuracy]);
+  }, [currentView, multiplayerChannel, multiplayerCountdown, multiplayerCallsign, currentWpm, completedWordsCount, flowStreak, accuracy, score]);
 
   // ── Multiplayer Lobby Reset & Transition Protocol ─────────────────────────
   const transitionToLobby = useCallback(() => {
@@ -999,6 +1028,7 @@ function App() {
     setOpponentCursors({});
     setOpponentScores({});
     setOpponentFinishResults({});
+    localFinalStatsRef.current = null;
     setSnatchedAlert(null);
     if (snatchedAlertTimeoutRef.current) clearTimeout(snatchedAlertTimeoutRef.current);
 
@@ -1023,6 +1053,7 @@ function App() {
     setOpponentCursors({});
     setOpponentScores({});
     setOpponentFinishResults({});
+    localFinalStatsRef.current = null;
     setSnatchedAlert(null);
     if (snatchedAlertTimeoutRef.current) clearTimeout(snatchedAlertTimeoutRef.current);
     setWords([]);
@@ -1069,6 +1100,7 @@ function App() {
     setOpponentCursors({});
     setOpponentScores({});
     setOpponentFinishResults({});
+    localFinalStatsRef.current = null;
     setSnatchedAlert(null);
     setGameMode('Chrono');
 
@@ -1281,6 +1313,7 @@ function App() {
             wpm: payload.wpm,
             streak: payload.streak,
             accuracy: payload.accuracy,
+            score: payload.score ?? (payload.completedCount ?? 0) * 100,
           },
         }));
       }
@@ -1293,6 +1326,32 @@ function App() {
           ...prev,
           [payload.callsign]: payload,
         }));
+
+        setOpponentScores((prev) => ({
+          ...prev,
+          [payload.callsign]: {
+            callsign: payload.callsign,
+            completedCount: payload.wordsCompleted ?? payload.completedCount ?? 0,
+            wpm: payload.finalWpm ?? payload.wpm ?? 0,
+            streak: prev[payload.callsign]?.streak ?? 0,
+            accuracy: payload.finalAccuracy ?? payload.accuracy ?? 100,
+            score: payload.finalScore ?? payload.score ?? 0,
+          },
+        }));
+
+        // Two-way handshake: If we have already finished the match, respond with our own final stats
+        // so late-arriving peers always receive our results
+        if (localFinalStatsRef.current && payload.callsign !== multiplayerCallsign) {
+          try {
+            multiplayerChannel.send({
+              type: 'broadcast',
+              event: 'MATCH_FINISH',
+              payload: localFinalStatsRef.current,
+            });
+          } catch (e) {
+            console.warn('[MATCH_FINISH HANDSHAKE ERROR]', e);
+          }
+        }
       }
     });
 
@@ -1327,12 +1386,13 @@ function App() {
 
   // ── Podium Players Roster Memo ─────────────────────────────────────────────
   const podiumPlayersList: PodiumPlayer[] = useMemo(() => {
+    const localFinish = localFinalStatsRef.current;
     const localPlayer: PodiumPlayer = {
       callsign: multiplayerCallsign || 'YOU',
-      wpm: currentWpm,
-      accuracy,
-      wordsCompleted: completedWordsCount,
-      score,
+      wpm: localFinish?.finalWpm ?? currentWpm,
+      accuracy: localFinish?.finalAccuracy ?? accuracy,
+      wordsCompleted: localFinish?.wordsCompleted ?? completedWordsCount,
+      score: localFinish?.finalScore ?? score,
       isLocal: true,
     };
 
@@ -1344,19 +1404,21 @@ function App() {
         wpm: finish?.finalWpm ?? scoreState?.wpm ?? 0,
         accuracy: finish?.finalAccuracy ?? scoreState?.accuracy ?? 100,
         wordsCompleted: finish?.wordsCompleted ?? scoreState?.completedCount ?? 0,
-        score: finish?.finalScore ?? (scoreState?.completedCount ?? 0) * 100,
+        score: finish?.finalScore ?? scoreState?.score ?? (scoreState?.completedCount ?? 0) * 100,
         isLocal: false,
       };
     });
 
     multiplayerPlayers.forEach((p) => {
       if (p.callsign !== multiplayerCallsign && !opponentList.some((o) => o.callsign === p.callsign)) {
+        const finish = opponentFinishResults[p.callsign];
+        const scoreState = opponentScores[p.callsign];
         opponentList.push({
           callsign: p.callsign,
-          wpm: 0,
-          accuracy: 100,
-          wordsCompleted: 0,
-          score: 0,
+          wpm: finish?.finalWpm ?? scoreState?.wpm ?? 0,
+          accuracy: finish?.finalAccuracy ?? scoreState?.accuracy ?? 100,
+          wordsCompleted: finish?.wordsCompleted ?? scoreState?.completedCount ?? 0,
+          score: finish?.finalScore ?? scoreState?.score ?? 0,
           isLocal: false,
         });
       }
@@ -1373,6 +1435,29 @@ function App() {
     opponentFinishResults,
     multiplayerPlayers,
   ]);
+
+  // ── Podium Match Finish Re-Announce ─────────────────────────────────────────
+  useEffect(() => {
+    if (currentView !== 'mp-podium' || !multiplayerChannel || !localFinalStatsRef.current) return;
+
+    const announce = () => {
+      if (localFinalStatsRef.current && multiplayerChannel) {
+        try {
+          multiplayerChannel.send({
+            type: 'broadcast',
+            event: 'MATCH_FINISH',
+            payload: localFinalStatsRef.current,
+          });
+        } catch (e) {
+          console.warn('[PODIUM ANNOUNCE ERROR]', e);
+        }
+      }
+    };
+
+    announce();
+    const timer = setTimeout(announce, 500);
+    return () => clearTimeout(timer);
+  }, [currentView, multiplayerChannel]);
 
   // Parallax layers
   const windowCenterX = window.innerWidth / 2;

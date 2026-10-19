@@ -7,6 +7,7 @@ export interface PlayerScoreState {
   wpm: number;
   streak: number;
   accuracy: number;
+  score?: number;
 }
 
 interface MultiplayerRaceRibbonProps {

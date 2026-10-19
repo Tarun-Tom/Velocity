@@ -50,8 +50,11 @@ export const PodiumArchive: React.FC<PodiumArchiveProps> = ({
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [onReturnToLobby, onExitArena]);
 
-  // Sort players by wordsCompleted descending, then WPM descending
+  // Sort players by score descending, then wordsCompleted descending, then WPM descending
   const sorted = [...players].sort((a, b) => {
+    if (b.score !== a.score) {
+      return b.score - a.score;
+    }
     if (b.wordsCompleted !== a.wordsCompleted) {
       return b.wordsCompleted - a.wordsCompleted;
     }
@@ -395,7 +398,8 @@ export const PodiumArchive: React.FC<PodiumArchiveProps> = ({
                   </span>
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 18 }}>
-                  <span style={{ color: goldColor, fontWeight: 700 }}>{p.wordsCompleted} WORDS CLEARED</span>
+                  <span style={{ color: goldColor, fontWeight: 700 }}>{p.score} PTS</span>
+                  <span style={{ color: textColor }}>{p.wordsCompleted} WORDS</span>
                   <span style={{ color: textColor }}>{p.wpm} WPM</span>
                   <span style={{ color: subtextColor }}>{p.accuracy}% ACC</span>
                 </div>

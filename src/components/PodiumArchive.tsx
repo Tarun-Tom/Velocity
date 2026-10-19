@@ -272,7 +272,7 @@ export const PodiumArchive: React.FC<PodiumArchiveProps> = ({
                 </div>
                 <div>
                   <div style={{ color: subtextColor, fontSize: 9, letterSpacing: '0.1em' }}>FINAL WPM</div>
-                  <div style={{ color: goldColor, fontWeight: 800, fontSize: 24 }}>{first.wpm}</div>
+                  <div style={{ color: goldColor, fontWeight: 800, fontSize: 24 }}>{first.wpm} <span style={{ fontSize: 14 }}>WPM</span></div>
                 </div>
                 <div>
                   <div style={{ color: subtextColor, fontSize: 9, letterSpacing: '0.1em' }}>ACCURACY</div>

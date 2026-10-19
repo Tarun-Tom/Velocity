@@ -117,7 +117,6 @@ function App() {
 
   const prngRef = useRef<(() => number) | null>(null);
   const lastCursorBroadcastRef = useRef<number>(0);
-  const lastScoreBroadcastRef = useRef<number>(0);
   const localFinalStatsRef = useRef<any>(null);
 
   const [isMobile, setIsMobile] = useState<boolean>(() => {
@@ -353,14 +352,13 @@ function App() {
     
     const interval = setInterval(() => {
       if (gameMode === 'Chrono' || gameMode === 'Overdrive') {
-        setTimeLeft(prev => {
-          if (prev <= 1) {
-            clearInterval(interval);
-            triggerGameOver();
-            return 0;
-          }
-          return prev - 1;
-        });
+        if (stateRef.current.timeLeft <= 1) {
+          clearInterval(interval);
+          setTimeLeft(0);
+          triggerGameOver();
+        } else {
+          setTimeLeft(prev => Math.max(0, prev - 1));
+        }
       }
     }, 1000);
 
@@ -385,9 +383,14 @@ function App() {
     if (current.currentView === 'mp-game') {
       if (current.multiplayerChannel) {
         const channel = current.multiplayerChannel;
+        // Calculate overall session WPM so players who paused in the last 2 seconds don't transmit 0 WPM
+        const elapsedSeconds = current.startTime ? Math.max(1, (Date.now() - current.startTime) / 1000) : 60;
+        const overallWpm = Math.round((current.correctKeys / 5) / (elapsedSeconds / 60));
+        const calculatedFinalWpm = Math.max(current.currentWpm, overallWpm);
+
         const finalStats = {
           callsign: current.multiplayerCallsign,
-          finalWpm: current.currentWpm,
+          finalWpm: calculatedFinalWpm,
           finalAccuracy: currentAccuracy,
           wordsCompleted: current.completedWordsCount,
           finalScore: currentScore,
@@ -407,9 +410,7 @@ function App() {
         };
 
         broadcastFinish();
-        setTimeout(broadcastFinish, 300);
-        setTimeout(broadcastFinish, 800);
-        setTimeout(broadcastFinish, 1500);
+        setTimeout(broadcastFinish, 350);
       }
       setCurrentView('mp-podium');
     } else {
@@ -978,27 +979,40 @@ function App() {
     return () => window.removeEventListener('mousemove', handlePointerMove);
   }, [currentView, multiplayerChannel, multiplayerCountdown, multiplayerCallsign]);
 
-  // ── Periodic Live Score Broadcast (WPM refresh every 500ms) ───────────────
+  // ── Periodic Live Score Broadcast (every 1000ms during mp-game) ───────────────
   useEffect(() => {
     if (currentView !== 'mp-game' || !multiplayerChannel || multiplayerCountdown !== null) return;
 
-    const now = Date.now();
-    if (now - lastScoreBroadcastRef.current >= 500) {
-      lastScoreBroadcastRef.current = now;
-      multiplayerChannel.send({
-        type: 'broadcast',
-        event: 'SCORE_UPDATE',
-        payload: {
-          callsign: multiplayerCallsign,
-          completedCount: completedWordsCount,
-          wpm: currentWpm,
-          streak: flowStreak,
-          accuracy,
-          score,
-        },
-      });
-    }
-  }, [currentView, multiplayerChannel, multiplayerCountdown, multiplayerCallsign, currentWpm, completedWordsCount, flowStreak, accuracy, score]);
+    const interval = setInterval(() => {
+      const current = stateRef.current;
+      if (current.currentView !== 'mp-game' || !current.multiplayerChannel) return;
+
+      const totalK = current.correctKeys + current.incorrectKeys;
+      const acc = totalK > 0 ? Math.round((current.correctKeys / totalK) * 100) : 100;
+      const raw = (current.correctKeys * 10) + (current.synergyPoints * 100);
+      const mult = acc === 100 ? 1.0 : (acc < 95 ? 0.8 : 1.0);
+      const computedScore = Math.round(raw * mult);
+
+      try {
+        current.multiplayerChannel.send({
+          type: 'broadcast',
+          event: 'SCORE_UPDATE',
+          payload: {
+            callsign: current.multiplayerCallsign,
+            completedCount: current.completedWordsCount,
+            wpm: current.currentWpm,
+            streak: current.flowStreak,
+            accuracy: acc,
+            score: computedScore,
+          },
+        });
+      } catch (err) {
+        console.warn('[SCORE_UPDATE BROADCAST ERROR]', err);
+      }
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [currentView, multiplayerChannel, multiplayerCountdown]);
 
   // ── Multiplayer Lobby Reset & Transition Protocol ─────────────────────────
   const transitionToLobby = useCallback(() => {
@@ -1304,58 +1318,65 @@ function App() {
 
     // 2. Realtime Score Updates
     multiplayerChannel.on('broadcast', { event: 'SCORE_UPDATE' }, ({ payload }) => {
-      if (payload && payload.callsign && payload.callsign !== multiplayerCallsign) {
+      const myTag = (multiplayerCallsign || '').trim().toLowerCase();
+      const senderTag = (payload?.callsign || '').trim();
+      if (senderTag && senderTag.toLowerCase() !== myTag) {
         setOpponentScores((prev) => ({
           ...prev,
-          [payload.callsign]: {
-            callsign: payload.callsign,
-            completedCount: payload.completedCount,
-            wpm: payload.wpm,
-            streak: payload.streak,
-            accuracy: payload.accuracy,
+          [senderTag]: {
+            callsign: senderTag,
+            completedCount: payload.completedCount ?? 0,
+            wpm: payload.wpm ?? 0,
+            streak: payload.streak ?? 0,
+            accuracy: payload.accuracy ?? 100,
             score: payload.score ?? (payload.completedCount ?? 0) * 100,
           },
         }));
       }
     });
 
-    // 3. Match Completion Signals
+    // 3. Match Completion Signals (strictly one-way — never echo MATCH_FINISH here to avoid broadcast storm)
     multiplayerChannel.on('broadcast', { event: 'MATCH_FINISH' }, ({ payload }) => {
-      if (payload && payload.callsign) {
+      const myTag = (multiplayerCallsign || '').trim().toLowerCase();
+      const senderTag = (payload?.callsign || '').trim();
+      if (senderTag && senderTag.toLowerCase() !== myTag) {
         setOpponentFinishResults((prev) => ({
           ...prev,
-          [payload.callsign]: payload,
+          [senderTag]: payload,
         }));
 
         setOpponentScores((prev) => ({
           ...prev,
-          [payload.callsign]: {
-            callsign: payload.callsign,
-            completedCount: payload.wordsCompleted ?? payload.completedCount ?? 0,
-            wpm: payload.finalWpm ?? payload.wpm ?? 0,
-            streak: prev[payload.callsign]?.streak ?? 0,
-            accuracy: payload.finalAccuracy ?? payload.accuracy ?? 100,
-            score: payload.finalScore ?? payload.score ?? 0,
+          [senderTag]: {
+            callsign: senderTag,
+            completedCount: payload.wordsCompleted ?? payload.completedCount ?? prev[senderTag]?.completedCount ?? 0,
+            wpm: payload.finalWpm ?? payload.wpm ?? prev[senderTag]?.wpm ?? 0,
+            streak: prev[senderTag]?.streak ?? 0,
+            accuracy: payload.finalAccuracy ?? payload.accuracy ?? prev[senderTag]?.accuracy ?? 100,
+            score: payload.finalScore ?? payload.score ?? prev[senderTag]?.score ?? 0,
           },
         }));
+      }
+    });
 
-        // Two-way handshake: If we have already finished the match, respond with our own final stats
-        // so late-arriving peers always receive our results
-        if (localFinalStatsRef.current && payload.callsign !== multiplayerCallsign) {
-          try {
-            multiplayerChannel.send({
-              type: 'broadcast',
-              event: 'MATCH_FINISH',
-              payload: localFinalStatsRef.current,
-            });
-          } catch (e) {
-            console.warn('[MATCH_FINISH HANDSHAKE ERROR]', e);
-          }
+    // 4. Dedicated Sync Handshake: Peer requests podium stats
+    multiplayerChannel.on('broadcast', { event: 'SYNC_PODIUM_REQUEST' }, ({ payload }) => {
+      const myTag = (multiplayerCallsign || '').trim().toLowerCase();
+      const requester = (payload?.from || '').trim().toLowerCase();
+      if (requester && requester !== myTag && localFinalStatsRef.current) {
+        try {
+          multiplayerChannel.send({
+            type: 'broadcast',
+            event: 'MATCH_FINISH',
+            payload: localFinalStatsRef.current,
+          });
+        } catch (e) {
+          console.warn('[SYNC_PODIUM_RESPONSE ERROR]', e);
         }
       }
     });
 
-    // 4. Return to Lobby Protocol (Host & Peer Sync)
+    // 5. Return to Lobby Protocol (Host & Peer Sync)
     multiplayerChannel.on('broadcast', { event: 'RESET_LOBBY' }, () => {
       transitionToLobby();
     });
@@ -1387,8 +1408,12 @@ function App() {
   // ── Podium Players Roster Memo ─────────────────────────────────────────────
   const podiumPlayersList: PodiumPlayer[] = useMemo(() => {
     const localFinish = localFinalStatsRef.current;
+    const myTag = (multiplayerCallsign || 'YOU').trim();
+    const myTagLower = myTag.toLowerCase();
+
+    // 1. Local Player Entry
     const localPlayer: PodiumPlayer = {
-      callsign: multiplayerCallsign || 'YOU',
+      callsign: myTag,
       wpm: localFinish?.finalWpm ?? currentWpm,
       accuracy: localFinish?.finalAccuracy ?? accuracy,
       wordsCompleted: localFinish?.wordsCompleted ?? completedWordsCount,
@@ -1396,32 +1421,60 @@ function App() {
       isLocal: true,
     };
 
-    const opponentList: PodiumPlayer[] = Object.keys(opponentScores).map((oppTag) => {
-      const finish = opponentFinishResults[oppTag];
-      const scoreState = opponentScores[oppTag];
-      return {
-        callsign: oppTag,
-        wpm: finish?.finalWpm ?? scoreState?.wpm ?? 0,
-        accuracy: finish?.finalAccuracy ?? scoreState?.accuracy ?? 100,
-        wordsCompleted: finish?.wordsCompleted ?? scoreState?.completedCount ?? 0,
-        score: finish?.finalScore ?? scoreState?.score ?? (scoreState?.completedCount ?? 0) * 100,
-        isLocal: false,
-      };
-    });
+    // Helper for case-insensitive and whitespace-trimmed dictionary lookup
+    const findInDict = <T,>(dict: Record<string, T>, tag: string): T | undefined => {
+      const normalized = tag.trim().toLowerCase();
+      for (const [k, v] of Object.entries(dict)) {
+        if (k.trim().toLowerCase() === normalized) return v;
+      }
+      return undefined;
+    };
+
+    // 2. Collect unique opponent tags from all sources:
+    // - multiplayerPlayers (presence roster)
+    // - opponentFinishResults (final stats received)
+    // - opponentScores (live score broadcasts)
+    const opponentTagsMap = new Map<string, string>(); // lowerCase -> originalCase
 
     multiplayerPlayers.forEach((p) => {
-      if (p.callsign !== multiplayerCallsign && !opponentList.some((o) => o.callsign === p.callsign)) {
-        const finish = opponentFinishResults[p.callsign];
-        const scoreState = opponentScores[p.callsign];
-        opponentList.push({
-          callsign: p.callsign,
-          wpm: finish?.finalWpm ?? scoreState?.wpm ?? 0,
-          accuracy: finish?.finalAccuracy ?? scoreState?.accuracy ?? 100,
-          wordsCompleted: finish?.wordsCompleted ?? scoreState?.completedCount ?? 0,
-          score: finish?.finalScore ?? scoreState?.score ?? 0,
-          isLocal: false,
-        });
+      const tag = p.callsign?.trim();
+      if (tag && tag.toLowerCase() !== myTagLower) {
+        opponentTagsMap.set(tag.toLowerCase(), tag);
       }
+    });
+
+    Object.keys(opponentScores).forEach((k) => {
+      const tag = k.trim();
+      if (tag && tag.toLowerCase() !== myTagLower && !opponentTagsMap.has(tag.toLowerCase())) {
+        opponentTagsMap.set(tag.toLowerCase(), tag);
+      }
+    });
+
+    Object.keys(opponentFinishResults).forEach((k) => {
+      const tag = k.trim();
+      if (tag && tag.toLowerCase() !== myTagLower && !opponentTagsMap.has(tag.toLowerCase())) {
+        opponentTagsMap.set(tag.toLowerCase(), tag);
+      }
+    });
+
+    // 3. Build opponent podium entries with robust fallback hierarchy
+    const opponentList: PodiumPlayer[] = Array.from(opponentTagsMap.values()).map((tag) => {
+      const finish = findInDict(opponentFinishResults, tag);
+      const scoreState = findInDict(opponentScores, tag);
+
+      const wordsCompleted = finish?.wordsCompleted ?? scoreState?.completedCount ?? 0;
+      const wpm = finish?.finalWpm ?? scoreState?.wpm ?? 0;
+      const playerAccuracy = finish?.finalAccuracy ?? scoreState?.accuracy ?? (wordsCompleted > 0 ? 100 : 0);
+      const calculatedScore = finish?.finalScore ?? scoreState?.score ?? (wordsCompleted * 100);
+
+      return {
+        callsign: tag,
+        wpm,
+        accuracy: playerAccuracy,
+        wordsCompleted,
+        score: calculatedScore,
+        isLocal: false,
+      };
     });
 
     return [localPlayer, ...opponentList];
@@ -1436,11 +1489,36 @@ function App() {
     multiplayerPlayers,
   ]);
 
-  // ── Podium Match Finish Re-Announce ─────────────────────────────────────────
+  // ── Podium Match Finish Re-Announce & Peer Sync Request ─────────────────────
   useEffect(() => {
-    if (currentView !== 'mp-podium' || !multiplayerChannel || !localFinalStatsRef.current) return;
+    if (currentView !== 'mp-podium' || !multiplayerChannel) return;
 
-    const announce = () => {
+    // Send our match finish if ready
+    if (localFinalStatsRef.current) {
+      try {
+        multiplayerChannel.send({
+          type: 'broadcast',
+          event: 'MATCH_FINISH',
+          payload: localFinalStatsRef.current,
+        });
+      } catch (e) {
+        console.warn('[PODIUM ANNOUNCE ERROR]', e);
+      }
+    }
+
+    // Request finish stats from peers in case we joined podium slightly after them
+    try {
+      multiplayerChannel.send({
+        type: 'broadcast',
+        event: 'SYNC_PODIUM_REQUEST',
+        payload: { from: multiplayerCallsign },
+      });
+    } catch (e) {
+      console.warn('[PODIUM SYNC REQUEST ERROR]', e);
+    }
+
+    // Single 400ms retry to guarantee delivery across network latency
+    const timer = setTimeout(() => {
       if (localFinalStatsRef.current && multiplayerChannel) {
         try {
           multiplayerChannel.send({
@@ -1449,15 +1527,13 @@ function App() {
             payload: localFinalStatsRef.current,
           });
         } catch (e) {
-          console.warn('[PODIUM ANNOUNCE ERROR]', e);
+          // ignore
         }
       }
-    };
+    }, 400);
 
-    announce();
-    const timer = setTimeout(announce, 500);
     return () => clearTimeout(timer);
-  }, [currentView, multiplayerChannel]);
+  }, [currentView, multiplayerChannel, multiplayerCallsign]);
 
   // Parallax layers
   const windowCenterX = window.innerWidth / 2;
